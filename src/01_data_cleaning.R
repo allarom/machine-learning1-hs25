@@ -2,28 +2,23 @@
 source("src/00_load_packages.R")
 
 
-# 1) Load data -------------------------------------------------------------
-raw_path <- "data/raw/used_cars.csv"
-cars_raw <- readr::read_csv(raw_path, show_col_types = FALSE)
-
-# Quick look
-glimpse(cars_raw)
-summary(cars_raw)
-
-
 # ==============================================
 # Data Cleaning and Preprocessing for Used Cars
 # ==============================================
 # This script reads the raw used cars dataset, cleans and transforms columns,
 # handles outliers and rare categories, and prepares the dataset for predictive modeling.
 
-# Define file paths and names
-path='C:/Users/tashi/Hochschule Luzern/2. Semester/W.MPM02_Applied Machine Learning and Predictive Modelling 1/group_work/'
-input_name='used_cars.csv'
-output_name='used_cars_cleaned.csv'
+# Define file paths and names using here for portability
+raw_path <- here::here("data", "raw", "used_cars.csv")
+output_path <- here::here("data", "processed", "used_cars_cleaned.csv")
 
-# Read the dataset from CSV file
-data <- read.csv(file.path(path, input_name),sep = ';')
+message("Using data file: ", raw_path)
+if (!file.exists(raw_path)) {
+  stop("Data file not found at: ", raw_path)
+}
+
+# Read the dataset from CSV file (comma-separated)
+data <- read.csv(raw_path)
 
 # Keep only vehicles with a clean title to ensure reliable pricing data
 data <- subset(data, clean_title == "Yes")
@@ -75,4 +70,4 @@ data$int_col[data$int_col == "â\200“"] <- "Unknown"
 data <- data[!data$price_dollar %in% c(2954083, 1599000), ]
 
 # Write the cleaned dataset to a CSV file
-write.table(data, file.path(path, output_name), sep = ";", row.names = FALSE, quote = TRUE)
+write.table(data, output_path, sep = ";", row.names = FALSE, quote = TRUE)

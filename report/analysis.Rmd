@@ -3,4 +3,52 @@ title: "Used Cars – Applied ML Project"
 output: html_document
 ---
 
-# Introduction
+<!-- Load libraries -->
+```{r setup, message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse)
+library(here)
+```
+
+# About the Dataset (Summary)
+
+The Used Car Price Prediction dataset contains 4,009 vehicle listings collected from the automotive marketplace cars.com.
+Each row represents a unique car and includes nine key attributes relevant to pricing and vehicle characteristics.
+Dataset is taken from Kaggle: https://www.kaggle.com/datasets/taeefnajib/used-car-price-prediction-dataset
+
+The dataset provides information on:
+
+**Brand and model** – manufacturer and specific vehicle model
+
+**Model year ** – age of the car, influencing depreciation
+
+**Mileage** – an indicator of usage and wear
+
+**Fuel type** – e.g., gasoline, diesel, electric, hybrid
+
+**Engine type** – performance and efficiency characteristics
+
+**Transmission** – automatic or manual
+
+**Exterior/interior colors** – aesthetic properties
+
+**Accident history** – whether the car has previously been damaged
+
+**Clean title** – legal/ownership status
+
+**Price** – listed price of the vehicle
+
+Overall, the dataset offers a structured overview of key features that influence used car valuation. It is well-suited for analytical tasks such as understanding pricing drivers, exploring consumer preferences, and building predictive models for vehicle prices.
+# Raw data
+
+We load the original CSV directly from the project data folder using `here()` so paths work regardless of the working directory.
+
+```{r load-raw, message=FALSE}
+raw_path <- here("data", "raw", "used_cars.csv")
+cars_raw <- readr::read_csv(raw_path, show_col_types = FALSE)
+```
+
+Basic structure and summary statistics of the raw dataset:
+
+```{r raw-summary}
+glimpse(cars_raw)
+```

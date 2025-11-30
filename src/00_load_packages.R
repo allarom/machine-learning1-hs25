@@ -8,6 +8,7 @@ packages <- c(
   "tidyverse",
   "data.table",
   "janitor",
+  "here",
   
   # Visualization
   "ggplot2",
@@ -47,3 +48,20 @@ lapply(packages, library, character.only = TRUE)
 
 message("All packages loaded successfully.")
 
+# Compile the existing report/analysis.Rmd from any working directory.
+# Example: after sourcing this file, run compile_analysis_report().
+compile_analysis_report <- function(
+  input = here("report", "analysis.Rmd"),
+  output_dir = here("report"),
+  output_format = "html_document"
+) {
+  if (!file.exists(input)) {
+    stop("Cannot find analysis file at: ", input)
+  }
+  rmarkdown::render(
+    input = input,
+    output_dir = output_dir,
+    output_format = output_format,
+    envir = new.env()
+  )
+}
