@@ -64,7 +64,7 @@ cars <- readr::read_delim(features_path, delim = ";", show_col_types = FALSE)
 
 ## Key descriptive values
 
-```{r descriptive-table, message=FALSE}
+```{r descriptive-table, message=FALSE, echo=FALSE}
 num_summary <- tibble::tibble(
   variable = c("price_dollar", "log_price", "age", "milage_k", "horsepower"),
   median   = c(median(cars$price_dollar), median(cars$log_price), median(cars$age), median(cars$milage_k), median(cars$horsepower)),
@@ -79,7 +79,7 @@ num_summary <- tibble::tibble(
 knitr::kable(num_summary, digits = 2, caption = "Key numeric feature summaries")
 ```
 
-```{r accident-summary, message=FALSE}
+```{r accident-summary, message=FALSE, echo=FALSE}
 accident_tbl <- as.data.frame(table(cars$accident), stringsAsFactors = FALSE) |>
   dplyr::rename(accident = Var1, n = Freq) |>
   dplyr::mutate(share = n / sum(n))
