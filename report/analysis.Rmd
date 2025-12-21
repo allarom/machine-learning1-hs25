@@ -52,3 +52,93 @@ Basic structure and summary statistics of the raw dataset:
 ```{r raw-summary}
 glimpse(cars_raw)
 ```
+
+# Exploratory Data Analysis
+
+We base the EDA on the engineered dataset (`data/processed/used_cars_features.csv`) that keeps cleaned numeric fields and derived features like age, mileage in thousands, and accident flags.
+
+```{r load-features, message=FALSE}
+features_path <- here("data", "processed", "used_cars_features.csv")
+cars <- readr::read_delim(features_path, delim = ";", show_col_types = FALSE)
+```
+
+## Key descriptive values
+
+```{r descriptive-table, message=FALSE}
+num_summary <- tibble::tibble(
+  variable = c("price_dollar", "log_price", "age", "milage_k", "horsepower"),
+  median   = c(median(cars$price_dollar), median(cars$log_price), median(cars$age), median(cars$milage_k), median(cars$horsepower)),
+  mean     = c(mean(cars$price_dollar), mean(cars$log_price), mean(cars$age), mean(cars$milage_k), mean(cars$horsepower)),
+  p25      = c(quantile(cars$price_dollar, 0.25), quantile(cars$log_price, 0.25), quantile(cars$age, 0.25), quantile(cars$milage_k, 0.25), quantile(cars$horsepower, 0.25)),
+  p75      = c(quantile(cars$price_dollar, 0.75), quantile(cars$log_price, 0.75), quantile(cars$age, 0.75), quantile(cars$milage_k, 0.75), quantile(cars$horsepower, 0.75)),
+  sd       = c(sd(cars$price_dollar), sd(cars$log_price), sd(cars$age), sd(cars$milage_k), sd(cars$horsepower)),
+  min      = c(min(cars$price_dollar), min(cars$log_price), min(cars$age), min(cars$milage_k), min(cars$horsepower)),
+  max      = c(max(cars$price_dollar), max(cars$log_price), max(cars$age), max(cars$milage_k), max(cars$horsepower))
+)
+
+knitr::kable(num_summary, digits = 2, caption = "Key numeric feature summaries")
+```
+
+```{r accident-summary, message=FALSE}
+accident_tbl <- as.data.frame(table(cars$accident), stringsAsFactors = FALSE) |>
+  dplyr::rename(accident = Var1, n = Freq) |>
+  dplyr::mutate(share = n / sum(n))
+
+knitr::kable(accident_tbl, digits = 2, caption = "Accident history distribution")
+```
+
+Median listing sits around \$28k, with the middle 50% between roughly \$15.5k and \$47k, while the maximum reaches \$650k—explaining the heavy right tail. Median age is 9 years (IQR: 6–14), typical mileage is about 63k miles (IQR: 30k–103k), and horsepower clusters around 310 HP (IQR: 248–400). About 28% of cars report an accident or damage, a meaningful factor for pricing.
+
+## Price distribution (raw and log)
+
+```{r price-raw, echo=FALSE, out.width="85%"}
+knitr::include_graphics(here("report", "plots", "price_distribution_raw.png"))
+```
+
+Raw prices are extremely right-skewed, with most listings below \$80k but a long tail of luxury and exotic vehicles. Modeling on this scale would be dominated by a few high-price outliers.
+
+```{r price-log, echo=FALSE, out.width="85%"}
+knitr::include_graphics(here("report", "plots", "price_distribution.png"))
+```
+
+Log transformation produces a more bell-shaped distribution and stabilizes variance, making linear-style models and visual comparisons more reliable.
+
+## Depreciation by age and fuel type
+
+```{r age-price, echo=FALSE, out.width="85%"}
+knitr::include_graphics(here("report", "plots", "age_vs_price.png"))
+```
+
+Prices decline with age across fuels. Electric listings start high but show the sharpest early drop; diesel holds comparatively high prices across ages (though the diesel sample is small), and gasoline sits lower overall.
+
+## Price spread across top brands
+
+```{r brand-price, echo=FALSE, out.width="85%"}
+knitr::include_graphics(here("report", "plots", "brand_price_boxplots.png"))
+```
+
+Among the 12 most common brands, Porsche leads on median price, followed by Land Rover and Mercedes-Benz; Volume brands (Toyota, Nissan, Jeep) cluster lower with tighter spreads, while some (Chevrolet, Ford) span broader lineups.
+
+## Mileage impact by transmission
+
+```{r milage-price, echo=FALSE, out.width="85%"}
+knitr::include_graphics(here("report", "plots", "milage_vs_price.png"))
+```
+
+Higher mileage correlates with lower prices. We use a loess smoother (not a straight trendline) and cap the x-axis at 250k miles to reduce the influence of extreme outliers; automatics show a steady decline, and the smaller manual subset is noisier but similar in direction.
+
+## Horsepower premium
+
+```{r hp-price, echo=FALSE, out.width="85%"}
+knitr::include_graphics(here("report", "plots", "horsepower_vs_price.png"))
+```
+
+Price rises with horsepower, especially from ~250 HP upward; we cap horsepower at 700 to avoid a handful of ultra-high-HP outliers from distorting the loess smoother, so the trend reflects the bulk of the market rather than extreme sports models.
+
+## Accident history effect
+
+```{r accident-price, echo=FALSE, out.width="70%"}
+knitr::include_graphics(here("report", "plots", "accident_vs_price.png"))
+```
+
+Cars with reported accidents trade at a clear discount relative to clean histories, even after log-scaling prices, confirming accident history as an important predictor.
