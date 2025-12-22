@@ -3,6 +3,9 @@
 # Run this file first (examplatory packages and the way how to load them in different files)
 # Loads (and installs if needed) all packages used in the ML project.
 
+# Set a default CRAN mirror to avoid interactive prompts
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
 packages <- c(
   # Data manipulation
   "tidyverse",

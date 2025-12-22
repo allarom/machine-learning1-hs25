@@ -1,0 +1,7 @@
+.metric,.estimator,.estimate,model
+rmse,standard,0.3689790296530498,caret_nnet
+mae,standard,0.26499561869987254,caret_nnet
+rsq,standard,0.7908817622261327,caret_nnet
+rmse,standard,0.40791098151848215,neuralnet_manual
+mae,standard,0.28456192782354134,neuralnet_manual
+rsq,standard,0.7434819501962749,neuralnet_manual

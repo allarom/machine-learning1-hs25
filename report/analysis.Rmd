@@ -235,3 +235,91 @@ patchwork::wrap_plots(
   widths = c(1, 1, 0.22)
 )
 ```
+
+## Neural network results
+
+Two regressors on `log_price`: a caret `nnet` (with dummying + scaling, 3-fold cross validation over size/decay) and a manual `neuralnet` (shallow hidden layer). Metrics below come from the test split; cross validation was used only for tuning.
+
+```{r nn-metrics, message=FALSE}
+nn_metrics <- readr::read_csv(
+  here("report", "models", "nn", "nn_log_price_metrics.csv"),
+  show_col_types = FALSE
+)
+
+nn_best <- readr::read_lines(here("report", "models", "nn", "nn_best_model.txt"))[1]
+
+nn_metrics_wide <- nn_metrics |>
+  tidyr::pivot_wider(names_from = .metric, values_from = .estimate)
+
+knitr::kable(nn_metrics_wide, digits = 3, caption = "Test metrics for NN variants (target: log_price)")
+```
+
+`r nn_best` — the manual `neuralnet` edge is small (RMSE ≈ 0.388 vs. 0.392), so both nets are in a similar error band; the manual net slightly reduces bias on the high end (see fewer large positive residuals).
+
+```{r nn-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
+pred_caret <- readr::read_delim(
+  here("report", "models", "nn", "nn_log_price_caret_predictions.csv"),
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  dplyr::mutate(model = "caret_nnet")
+
+pred_manual <- readr::read_delim(
+  here("report", "models", "nn", "nn_log_price_neuralnet_predictions.csv"),
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  dplyr::mutate(model = "neuralnet_manual")
+
+plot_nn <- function(df, title) {
+  df <- df |>
+    dplyr::mutate(resid = pred_log_price - log_price)
+
+  ggplot2::ggplot(df, ggplot2::aes(x = log_price, y = pred_log_price, color = resid)) +
+    ggplot2::geom_point(alpha = 0.7, size = 1.4) +
+    ggplot2::geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 0.8) +
+    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
+    ggplot2::coord_equal() +
+    ggplot2::scale_color_gradient2(
+      low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
+      midpoint = 0,
+      name = "Residual (pred - true)"
+    ) +
+    ggplot2::labs(
+      title = title,
+      x = "True log(price)",
+      y = "Predicted log(price)"
+    ) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      legend.position = "none",
+      plot.title.position = "plot",
+      plot.title = ggplot2::element_text(hjust = 0, vjust= -20)
+    )
+}
+
+p1 <- plot_nn(pred_caret, "caret nnet: predicted vs true")
+p2 <- plot_nn(pred_manual, "neuralnet manual: predicted vs true")
+
+legend_plot_nn <- ggplot2::ggplot(
+  data.frame(resid = c(-0.5, 0, 0.5), x = 1, y = 1),
+  ggplot2::aes(x = x, y = y, color = resid)
+) +
+  ggplot2::geom_point(alpha = 0) +
+  ggplot2::scale_color_gradient2(
+    low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
+    midpoint = 0,
+    name = "Residual (pred - true)\nred = under-prediction, grey = correct, green = over-prediction"
+  ) +
+  ggplot2::guides(color = ggplot2::guide_colorbar(barheight = unit(60, "pt"))) +
+  ggplot2::theme_void() +
+  ggplot2::theme(legend.position = "right")
+
+patchwork::wrap_plots(
+  p1,
+  p2,
+  legend_plot_nn,
+  ncol = 3,
+  widths = c(1, 1, 0.22)
+)
+```
