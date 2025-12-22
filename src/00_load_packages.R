@@ -19,6 +19,7 @@ packages <- c(
   # Modeling
   "mgcv",        # GAM
   "e1071",       # SVM
+  "kernlab",     # SVM (alternative)
   "nnet",        # Neural Networks (simple)
   "keras",       # Neural Networks (advanced, optional)
   "caret",       # ML workflows + CV
@@ -38,9 +39,15 @@ packages <- c(
 )
 
 # Install missing packages
+user_lib <- file.path(here::here(), "r_libs")
+if (!dir.exists(user_lib)) {
+  dir.create(user_lib, recursive = TRUE, showWarnings = FALSE)
+}
+.libPaths(c(user_lib, .libPaths()))
+
 installed <- packages %in% rownames(installed.packages())
 if (any(!installed)) {
-  install.packages(packages[!installed])
+  install.packages(packages[!installed], lib = user_lib)
 }
 
 # Load packages
