@@ -323,3 +323,193 @@ patchwork::wrap_plots(
   widths = c(1, 1, 0.22)
 )
 ```
+
+
+
+## 4. Linear regression model
+
+
+In Section 3 we saw that price is strongly right-skewed and that log(price) has an approximately 
+linear relationship with age. Based on this, we now fit a linear regression model with log(price) as response.
+
+The goal is not primarily to build the most accurate predictor, 
+but to understand which factors drive used-car prices and in which direction.
+
+We model the natural logarithm of the price instead of the raw price because:
+
+- prices are strictly positive and strongly right–skewed,
+- taking the log makes the distribution more symmetric,
+- the linear model assumptions (linear relationship, constant variance of the
+  residuals) are usually better satisfied on the log scale,
+- coefficients can be interpreted approximately as *percentage* effects.
+
+
+### 4.1. Model specification
+
+We use the feature dataset created in the previous step
+(`data/processed/used_cars_features.csv`) and fit the following multiple
+linear regression model on the log-price:
+
+`log_price ~ age + milage_k + accident_bin + brand + fuel_type + transmission + ext_col + int_col`
+
+Here
+
+- `log_price` is the natural logarithm of the car price in dollars
+  (the target variable / response).
+- `age` is the car age in years.
+- `milage_k` is the mileage in thousands of miles.
+- `accident_bin` is a binary variable  
+  (0 = no accident reported, 1 = at least one accident or damage reported).
+- `brand`, `fuel_type`, `transmission`, `ext_col` and `int_col` are
+  categorical predictors and are represented in the model by dummy variables
+  with one reference category each.
+- The error term (residual) captures the remaining variation not explained by
+  the predictors.
+
+The coefficients of this model measure how much the expected log-price changes
+when we increase a numeric predictor by one unit (or switch a dummy variable
+from 0 to 1), while *keeping all other variables fixed*.
+
+
+### 4.2 Estimation and overall performance
+
+We implement and fit the model by sourcing the script
+`src/04_model_linear.R`, which
+
+1. loads the feature data (`used_cars_features.csv`),
+2. selects the variables listed above and removes rows with missing values,
+3. fits the linear model with `stats::lm(...)`, and
+4. computes the root mean squared error (RMSE) and \(R^2\) on the log-price
+   scale and adds predictions back to the data.
+
+```{r linear-fit, message=FALSE, warning=FALSE}
+# Fit the baseline linear regression model and prepare lm_linear_data
+source(here::here("src", "04_model_linear.R"))
+
+# Show a compact summary of the model 
+broom::tidy(lm_linear) |> 
+  dplyr::slice(1:10)  # show only first 10 coefficients
+
+```
+
+### 4.3 Interpretation of selected coefficients
+
+Because the model is fitted on the log(price) scale, each coefficient can be
+read approximately as a **percentage change in price** when we increase that
+variable by one unit (or switch a dummy variable from 0 to 1), while keeping
+all other variables fixed. Roughly, a coefficient of −0.06 means “about −6 %”,
+a coefficient of +0.20 means “about +22 %”, and so on.
+
+Below we interpret a few selected coefficients from the model.
+
+- **Age (coefficient ≈ −0.058)**  
+  Holding all other variables constant, increasing the age of a car by one year
+  reduces the expected price by about **6 %** (exp(−0.058) ≈ 0.94).  
+  → Older cars are substantially cheaper, as expected.
+
+- **Mileage in thousands (coefficient ≈ −0.006)**  
+  An additional 1,000 miles reduces the expected price by roughly **0.6 %**.  
+  → The effect of mileage is noticeable but smaller than the effect of age.
+
+- **Accident history (`accident_bin`, coefficient ≈ −0.080)**  
+  `accident_bin = 1` indicates that at least one accident or damage has been
+  reported. Compared to a car with no accident history (`accident_bin = 0`),
+  the expected price is lower by about **8 %**.  
+  → Cars with an accident history sell for clearly lower prices.
+
+- **Brand examples**  
+  The brand coefficients show how each brand differs from the (omitted)
+  reference brand, holding age, mileage, accident history and all other
+  variables constant.
+
+  - `brandBMW` (coefficient ≈ 0.28): price is about **30 % higher** than for
+    the reference brand.  
+    → BMW cars are noticeably more expensive, even after controlling for other
+    factors.
+
+  - `brandFerrari` (coefficient ≈ 1.82): price is more than **six times
+    higher** (over +500 %) than for the reference brand.  
+    → Ferrari appears as an extreme premium brand in this dataset.
+
+- **Fuel type example (`fuel_typeElectric`, coefficient ≈ −0.79)**  
+  For purely electric cars, the coefficient corresponds to a price that is
+  roughly **55 % lower** than for the reference fuel type, given the same age,
+  mileage, brand etc.  
+  → In this sample, electric cars are priced clearly below comparable vehicles
+  with the reference fuel type (possibly due to different model mix, range
+  concerns, or incentives on combustion cars).
+
+- **Transmission (`transmissionManual`, coefficient ≈ 0.20)**  
+  Manual transmission has a coefficient of about 0.20, which translates to
+  prices that are roughly **20–22 % higher** than for the reference
+  transmission type.  
+  → Cars with manual transmission are on average more expensive in this sample.
+
+Overall, the signs and magnitudes of the coefficients are plausible: older and
+higher-mileage cars and cars with accidents are cheaper, while premium brands
+and certain configurations (e.g. BMW, Ferrari) command much higher prices.
+With an \(R^2\) of about 0.75 on the log-price scale, the model explains a
+large share of the variation in used car prices, even though there is still
+substantial unexplained variability.
+
+
+### 4.4. Relationship between age and log-price
+
+To visualise the effect of age in the linear model, we plot log-price against
+age and add a fitted linear trend line.
+
+
+```{r age-log-plot, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(lm_linear_data,
+       aes(x = age, y = log_price)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    x = "Age (years)",
+    y = "log(price)",
+    title = "Relationship between age and log(price)"
+  )
+```
+
+The plot shows the expected negative relationship: older cars tend to have a
+lower log-price. In our model, the age coefficient is about −0.058, which means
+that, holding all other variables constant, one additional year of age reduces
+the expected price by roughly 6 % (because exp(−0.058) ≈ 0.94).
+
+
+### 4.5. Residual diagnostics
+
+To check whether the linear model assumptions are roughly satisfied, we plot the
+residuals against the fitted (predicted) log-prices. Ideally, the points are
+scattered randomly around zero without a clear pattern.
+
+```{r linear-residual-plot, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(lm_linear_data,
+       aes(x = pred_log_price, y = resid_log_price)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    x = "Predicted log(price)",
+    y = "Residual (observed - predicted)",
+    title = "Residuals vs. predicted values"
+  )
+```
+In our plot, the residuals are roughly centred around zero with no strong
+curvature. There is some increase in spread for higher predicted prices, but
+overall the linear model assumptions appear acceptable.
+
+
+### 4.6 Conclusions (linear regression)
+
+Overall, the linear regression on log(price) provides a simple and
+interpretable summary of the main price drivers in this dataset. Age and
+mileage have the expected negative impact on prices, while an accident
+history leads to a price discount of roughly 8 %. Premium brands such as
+BMW and especially Ferrari command large price premia, even after
+controlling for age, mileage and fuel type. The model explains about
+75 % of the variance in log-prices, which is quite high for real-world
+data, but the residual plot also shows that there is still substantial
+unexplained variability. For a client, this model could already be used
+as a rough pricing guideline, but more advanced models (e.g. with
+interactions or nonlinear effects) might capture the remaining structure
+in the data even better.
