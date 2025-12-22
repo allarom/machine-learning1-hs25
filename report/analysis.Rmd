@@ -142,3 +142,96 @@ knitr::include_graphics(here("report", "plots", "accident_vs_price.png"))
 ```
 
 Cars with reported accidents trade at a clear discount relative to clean histories, even after log-scaling prices, confirming accident history as an important predictor.
+
+## SVM model results
+
+We fit radial-kernel SVM regressors on `log_price` using both `e1071::svm` and `kernlab` (via `caret::train`). Both models use the same 80/20 train-test split; hyperparameters are tuned by cross-validation and evaluated on the hold-out test set below.
+
+```{r svm-metrics, message=FALSE}
+svm_metrics <- readr::read_csv(
+  here("report", "models", "svm", "svm_log_price_metrics.csv"),
+  show_col_types = FALSE
+)
+
+svm_best <- readr::read_lines(here("report", "models", "svm", "svm_best_model.txt"))[1]
+
+svm_metrics_wide <- svm_metrics |>
+  tidyr::pivot_wider(names_from = .metric, values_from = .estimate)
+
+knitr::kable(svm_metrics_wide, digits = 3, caption = "Test metrics for SVM variants (target: log_price)")
+```
+
+The `e1071` radial SVM is best by RMSE (~0.290) and R² (~0.868), outperforming the kernlab variant on this split. SVMs do not yield straightforward coefficient interpretations; they learn support vectors and decision functions in a transformed feature space. To understand feature effects you would rely on downstream tools (e.g., partial dependence or SHAP), but within this report we focus on comparative error metrics and note that the tuned radial kernel captures non-linear relationships beyond the linear/log models. 
+
+Cross-validation setup: both SVMs were tuned with 3-fold cross validation on the training set (same 80/20 split for both). `e1071::tune()` searched a compact grid of `cost` and `gamma`; `caret::train(method = "svmRadial")` searched a grid of `C` and `sigma`. Final metrics shown above are from the untouched test set, so cross validation was only for hyperparameter selection.
+
+`r svm_best`
+
+```{r svm-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
+pred_e1071 <- readr::read_delim(
+  here("report", "models", "svm", "svm_log_price_e1071_predictions.csv"),
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  dplyr::mutate(model = "e1071_radial")
+
+pred_kern <- readr::read_delim(
+  here("report", "models", "svm", "svm_log_price_kernlab_predictions.csv"),
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  dplyr::mutate(model = "kernlab_radial")
+
+plot_svm <- function(df, title) {
+  df <- df |>
+    dplyr::mutate(resid = pred_log_price - log_price)
+
+  ggplot2::ggplot(df, ggplot2::aes(x = log_price, y = pred_log_price, color = resid)) +
+    ggplot2::geom_point(alpha = 0.7, size = 1.4) +
+    ggplot2::geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 0.8) +
+    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
+    ggplot2::coord_equal() +
+    ggplot2::scale_color_gradient2(
+      low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
+      midpoint = 0,
+      name = "Residual price (predicted  - true)\nred = under-prediction, grey = correct, green = over-prediction"
+    ) +
+    ggplot2::labs(
+      title = title,
+      x = "True log(price)",
+      y = "Predicted log(price)"
+    ) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      legend.position = "none",
+      plot.title.position = "plot",
+      plot.title = ggplot2::element_text(hjust = 0, vjust= -20)
+    )
+}
+
+p1 <- plot_svm(pred_e1071, "e1071 radial SVM:\n predicted vs true")
+p2 <- plot_svm(pred_kern, "kernlab radial SVM:\n predicted vs true")
+
+# Standalone legend using the same residual scale
+legend_plot <- ggplot2::ggplot(
+  data.frame(resid = c(-0.5, 0, 0.5), x = 1, y = 1),
+  ggplot2::aes(x = x, y = y, color = resid)
+) +
+  ggplot2::geom_point(alpha = 0) + # invisible points; legend only
+  ggplot2::scale_color_gradient2(
+    low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
+    midpoint = 0,
+    name = "Residual price (predicted  - true)\nred = under-prediction, grey = correct, green = over-prediction"
+  ) +
+  ggplot2::guides(color = ggplot2::guide_colorbar(barheight = unit(60, "pt"))) +
+  ggplot2::theme_void() +
+  ggplot2::theme(legend.position = "right")
+
+patchwork::wrap_plots(
+  p1,
+  p2,
+  legend_plot,
+  ncol = 3,
+  widths = c(1, 1, 0.22)
+)
+```
