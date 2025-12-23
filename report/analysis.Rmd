@@ -513,3 +513,123 @@ unexplained variability. For a client, this model could already be used
 as a rough pricing guideline, but more advanced models (e.g. with
 interactions or nonlinear effects) might capture the remaining structure
 in the data even better.
+
+
+
+
+## 6. Generalized Linear Model — Poisson
+
+A Poisson GLM is typically used when the **response variable is a count**
+(non-negative integers). Because this dataset does not contain a natural event
+count, we use a pragmatic proxy: **mileage in thousands** (`milage_k`),
+converted to an integer “count-like” variable (`milage_k_count`).  
+This section mainly demonstrates the **Poisson GLM workflow and interpretation**.
+
+### 6.1 Model specification
+
+We model the expected mileage count (in thousands) using a Poisson GLM with a log link:
+
+`milage_k_count ~ age + accident_bin + brand + fuel_type + transmission + ext_col + int_col`
+
+In a Poisson GLM with log link:
+
+- Response: `milage_k_count` (non-negative integer proxy)
+- Predictors: age, accident history, and categorical vehicle characteristics
+- Link: `log( E[milage_k_count] ) = linear predictor`
+
+So coefficients are interpreted **multiplicatively**:  
+`exp(beta)` is the factor change in the expected count for a one-unit increase (or dummy switch),
+holding other variables fixed.
+
+### 6.2 Estimation and overall performance
+
+We fit the Poisson GLM by sourcing `src/06_model_glm_poisson.R`, which:
+1) loads the feature data,  
+2) creates `milage_k_count`,  
+3) fits a Poisson GLM with log link, and  
+4) adds predictions/residuals back to the data.
+
+```{r poisson-fit, message=FALSE, warning=FALSE}
+source(here::here("src", "06_model_glm_poisson.R"))
+
+# compact coefficient table incl. significance stars
+poisson_tbl <- broom::tidy(glm_poisson) |>
+  dplyr::mutate(
+    signif = dplyr::case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      p.value < 0.1   ~ ".",
+      TRUE            ~ ""
+    )
+  )
+
+poisson_tbl |>
+  dplyr::select(term, estimate, std.error, statistic, p.value, signif) |>
+  dplyr::slice(1:12)
+```
+
+```{r poisson-metrics, echo=FALSE, message=FALSE, warning=FALSE}
+pseudo_r2 <- 1 - (glm_poisson$deviance / glm_poisson$null.deviance)
+dispersion <- sum(stats::residuals(glm_poisson, type = "pearson")^2) / glm_poisson$df.residual
+aic_val <- AIC(glm_poisson)
+
+data.frame(
+  AIC = aic_val,
+  pseudo_R2_deviance = pseudo_r2,
+  dispersion_pearson = dispersion
+)
+```
+
+If the **dispersion** is clearly above 1, the Poisson variance assumption
+(mean ≈ variance) may be violated (overdispersion). In a real use case you’d
+consider a quasi-Poisson or negative binomial model. We keep Poisson here for
+comparability and interpretation practice.
+
+### 6.3 Interpretation of selected coefficients
+
+In a Poisson GLM with log link:
+
+- `exp(beta) > 1` → expected count increases  
+- `exp(beta) < 1` → expected count decreases  
+- percent change: `(exp(beta) - 1) * 100`
+
+```{r poisson-effects, echo=FALSE, message=FALSE, warning=FALSE}
+effects_tbl <- broom::tidy(glm_poisson) |>
+  dplyr::mutate(
+    rate_ratio = exp(estimate),
+    pct_change = (rate_ratio - 1) * 100
+  )
+
+selected_terms <- c("age", "accident_bin", "transmissionManual", "fuel_typeElectric")
+
+effects_tbl |>
+  dplyr::filter(term %in% selected_terms) |>
+  dplyr::select(term, estimate, rate_ratio, pct_change, p.value) |>
+  dplyr::mutate(
+    rate_ratio = round(rate_ratio, 3),
+    pct_change = round(pct_change, 1)
+  )
+```
+
+### 6.4 Residual diagnostics
+
+```{r poisson-residual-plot, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(glm_poisson_data, aes(x = pred_milage_k, y = resid_milage_k)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    x = "Predicted milage_k_count",
+    y = "Residual (observed - predicted)",
+    title = "Poisson GLM: residuals vs. predicted values"
+  )
+```
+
+### 6.5 Conclusions (Poisson GLM)
+
+The Poisson GLM demonstrates how to model a count-like response with a log link
+and interpret effects as multiplicative changes via `exp(beta)`. While
+`milage_k_count` is not a true event count, this workflow is useful to practice
+GLM estimation, interpretation, and basic diagnostics. In a real client setting
+with genuine count outcomes, overdispersion should be checked carefully and a
+quasi-Poisson or negative binomial model may be more appropriate.
