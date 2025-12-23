@@ -1,6 +1,8 @@
 ---
 title: "Used Cars – Applied ML Project"
-output: html_document
+output:
+  html_document:
+    css: "styles.css"
 ---
 
 <!-- Load libraries -->
@@ -559,11 +561,39 @@ quasi-Poisson or negative binomial model may be more appropriate.
 ## 7. Generalised Additive Model (GAM)
 
 
-## SVM model results
+## 8. SVM model (regression)
+We fit Support Vector Machine (SVM) regression models to predict `log_price`. We used two libraries, which were used in lectures: `e1071` and `kernlab` (via `caret::train`). 
+Both models employ a radial kernel to capture non-linear relationships in the data.
 
-We fit radial-kernel SVM regressors on `log_price` using both `e1071::svm` and `kernlab` (via `caret::train`). Both models use the same 80/20 train-test split; hyperparameters are tuned by cross-validation and evaluated on the hold-out test set below.
+### 8.1 Model specification
+1.  Loads the engineered car data (used_cars_features.csv) and keep the predictors plus `log_price` target.
+2.  Splits the data `80/20` into train/test (seeded for reproducibility).
+3.  Defines a helper to compute RMSE/MAE/R².
+4.  Fits two radial SVM regressors:
+    - `e1071` svm tuned over a small cost/gamma grid with cross validation. 3-fold cross validation inside tune() selects the best combo on the training split.
+    - `caret` + `svmRadial` (kernlab) tuned over a small C/sigma grid with 3-fold cross validation.
 
-```{r svm-metrics, message=FALSE}
+### 8.2 Cross-validation
+
+As you see on the heatmap, some areas have similar green shades, indicating comparable performance across those parameter combinations. However,
+the lowest RMSE for e1071 was achieved with following parameters: cost=4, gamma=0.05 (CV RMSE=0.2846) 
+
+```{r svm-heatmap, echo=FALSE, out.width="60%"}
+knitr::include_graphics(here("report", "models", "svm", "svm_tuning_heatmap.png"))
+```
+
+And here you can see best kernlab parameters: C=2, sigma=0.01 (CV RMSE=0.4298)
+```{r svm-heatmap-caret, echo=FALSE, out.width="60%"}
+knitr::include_graphics(here("report", "models", "svm", "svm_tuning_heatmap_caret.png"))
+```
+
+
+
+### 8.2 Estimation and overall performance
+Cross-validation setup: both SVMs were tuned with 3-fold cross validation on the training set (same 80/20 split for both).
+You may notice that RMSE values differ between cross validation and test sets. This is expected due to differences in data splits and the nature of cross-validation.
+
+```{r svm-metrics, message=FALSE, echo=FALSE, warning=FALSE}
 svm_metrics <- readr::read_csv(
   here("report", "models", "svm", "svm_log_price_metrics.csv"),
   show_col_types = FALSE
@@ -579,9 +609,11 @@ knitr::kable(svm_metrics_wide, digits = 3, caption = "Test metrics for SVM varia
 
 The `e1071` radial SVM is best by RMSE (~0.290) and R² (~0.868), outperforming the kernlab variant on this split. SVMs do not yield straightforward coefficient interpretations; they learn support vectors and decision functions in a transformed feature space. To understand feature effects you would rely on downstream tools (e.g., partial dependence or SHAP), but within this report we focus on comparative error metrics and note that the tuned radial kernel captures non-linear relationships beyond the linear/log models. 
 
-Cross-validation setup: both SVMs were tuned with 3-fold cross validation on the training set (same 80/20 split for both). `e1071::tune()` searched a compact grid of `cost` and `gamma`; `caret::train(method = "svmRadial")` searched a grid of `C` and `sigma`. Final metrics shown above are from the untouched test set, so cross validation was only for hyperparameter selection.
 
 `r svm_best`
+
+
+### 8.3 Interpretation of results
 
 ```{r svm-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
 pred_e1071 <- readr::read_delim(
@@ -739,4 +771,3 @@ patchwork::wrap_plots(
   widths = c(1, 1, 0.22)
 )
 ```
-
