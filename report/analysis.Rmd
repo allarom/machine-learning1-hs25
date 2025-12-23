@@ -556,6 +556,8 @@ with genuine count outcomes, overdispersion should be checked carefully and a
 quasi-Poisson or negative binomial model may be more appropriate.
 
 
+## 7. Generalised Additive Model (GAM)
+
 
 ## SVM model results
 
