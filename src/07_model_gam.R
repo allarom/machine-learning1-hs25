@@ -8,19 +8,15 @@
 # using a GAM. Smooth terms are used to capture potential non-linear
 # relationships (e.g., mileage, price, horsepower, and age).
 
+# load packages
+source(here::here("src", "00_load_packages.R"))
 
 # Define file paths and names
-path='C:/Users/tashi/Hochschule Luzern/2. Semester/W.MPM02_Applied Machine Learning and Predictive Modelling 1/group_work/'
-input_name='used_cars_features.csv'
+input_path <- here::here("data", "processed", "used_cars_features.csv")
 
 # Read the dataset from CSV file
-data <- read.csv(file.path(path, input_name),sep = ';')
+data <- readr::read_delim(input_path, delim = ";", show_col_types = FALSE)
 
-# Explore the data structure
-str(data)
-
-# Load GAM package
-library(mgcv)
 
 # ===========================================================
 # Fit GAM Model
