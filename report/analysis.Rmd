@@ -380,6 +380,8 @@ summary(glm.car)
 
 We scale and exponentiate the coefficients of the binomial GLM to obtain **odds ratios**, which show how the odds of a car having an accident history change with each predictor.
 
+To improve interpretability, continuous predictors are rescaled before computing odds ratios. This rescaling does not affect statistical significance or model fit, only the unit of interpretation.
+
 The data were scaled as follows:
 
 - `milage_k` was multiplied by 10.
@@ -427,15 +429,15 @@ knitr::kable(glm_key_odds, digits = 3, caption = "GLM Binomial: Key Odds Ratios 
 
 - **Price (`price_dollar`)**: Odds ratio < 1 → Higher-priced vehicles are less likely to have an accident. Each additional $1,000 reduces the odds by ~2%, suggesting that more expensive cars are generally newer or better maintained.  
 
-- **Horsepower (`horsepower`)**: Odds ratio > 1 → More powerful cars slightly increase accident odds. For example, a 50 HP increase raises the odds by ~9.5%, possibly due to more spirited driving.  
+- **Horsepower (`horsepower`)**: Odds ratio > 1 → More powerful cars slightly increase accident odds. For example, a 50 HP increase raises the odds by ~9.5%, possibly due to more spirited driving.
 
-- **Fuel type – Electric (`fuel_typeElectric`)**: Odds ratio << 1 → Electric cars have substantially lower odds (~72% lower) of reported accidents compared to the reference fuel type. This effect is partially due to electric cars being newer on average.  
+- **Fuel type – Electric (`fuel_typeElectric`)**: Odds ratio << 1 → Electric cars have substantially lower odds (≈ 72 % lower) of reported accidents compared to the reference fuel type. This effect should be interpreted cautiously, as electric vehicles in this dataset are generally newer and may benefit from modern safety technologies.
 
-Most other predictors (brand, transmission, cylinders, age) were not statistically significant. These odds ratios provide an intuitive understanding of how each variable affects accident probability, holding all other variables constant.
+These odds ratios allow for an intuitive interpretation of how each variable affects accident probability, holding all other variables constant. Most other predictors (brand, transmission, cylinders, age) were not statistically significant in this model.
 
 ### 5.4 Conclusions (Binomial GLM)
 
-In conclusion, the logistic regression model indicates that higher mileage and greater horsepower slightly increase the likelihood of a reported accident, while higher-priced vehicles and electric cars are substantially less likely to have an accident history. Cheaper cars tend to have more accidents, likely due to older age, higher usage, fewer safety features, and lower maintenance. Electric cars in the dataset are generally newer, which contributes to their lower accident probability. Other factors such as brand, transmission, cylinders, and age were not statistically significant. The scaled odds ratios provide an intuitive understanding of the magnitude and direction of these effects, offering valuable insights for risk assessment and decision-making in the used car market.
+The binomial GLM indicates that accident probability is primarily driven by vehicle usage and value. Higher mileage and higher horsepower are associated with increased accident odds, while higher-priced cars are less likely to have a reported accident history. This is consistent with the intuition that cheaper cars tend to be older, more heavily used, and exposed to greater wear and risk. Electric vehicles exhibit substantially lower accident odds in the model. However, this result is likely influenced by sample composition: electric cars in the dataset are generally newer and therefore have had less exposure time to accidents. The observed fuel-type effect may therefore partially reflect vehicle age rather than an intrinsic safety advantage. Overall, the GLM provides a transparent and interpretable baseline model for accident risk. Its linear structure, however, limits its ability to capture nonlinear exposure effects, motivating the use of a Generalised Additive Model in the next section.
 
 
 ## 6. Generalized Linear Model — Poisson
