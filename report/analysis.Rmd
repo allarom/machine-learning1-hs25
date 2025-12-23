@@ -515,6 +515,110 @@ interactions or nonlinear effects) might capture the remaining structure
 in the data even better.
 
 
+## 5. Generalized Linear Model — Binomial (Logistic Regression)
+
+A binomial Generalized Linear Model (GLM) is appropriate when the **response
+variable is binary**.  
+Here, the response variable is:
+
+- `accident_bin`
+  - `1` = car has had at least one reported accident
+  - `0` = no reported accident
+
+The model estimates the **probability that a used car has an accident history**
+based on vehicle characteristics.
+
+### 5.1 Model specification
+
+We model accident history using a **logistic regression** with a logit link:
+
+\[
+\log\left(\frac{P(\text{accident}=1)}{1 - P(\text{accident}=1)}\right)
+= \beta_0 + \beta_1 X_1 + \dots + \beta_p X_p
+\]
+
+Model formula:
+
+`accident_bin ~ brand + age + milage_k + fuel_type + transmission +
+price_dollar + horsepower + cylinders`
+
+- **Response**: `accident_bin` (binary)
+- **Predictors**:
+  - Continuous: age, mileage (1,000 miles), price, horsepower, cylinders
+  - Categorical: brand, fuel type, transmission
+- **Link function**: logit
+
+
+### 5.2 Model fitting and summary
+
+```{r glm-fit, message=FALSE, warning=FALSE}
+# Source the script that fits the binomial GLM
+source(here::here("src", "05_model_glm_binomial.R"))
+
+# Show a full summary of the model 
+summary(glm.car)
+```
+
+### 5.3 Key Odds Ratios and Interpretation
+
+We scale and exponentiate the coefficients of the binomial GLM to obtain **odds ratios**, which show how the odds of a car having an accident history change with each predictor.
+
+The data were scaled as follows:
+
+- `milage_k` was multiplied by 10.
+- `price_dollar` was multiplied by 1,000.
+- `horsepower` was multiplied by 50.
+
+```{r glm-key-odds, message=FALSE, echo=FALSE, warning=FALSE}
+
+#Key predictors
+key_terms <- c("milage_k", "price_dollar", "horsepower", "fuel_typeElectric")
+
+#Scaling factors for interpretability
+scales <- c(milage_k = 10, # 10k miles
+price_dollar = 1000, # $1000
+horsepower = 50, # 50 HP
+fuel_typeElectric = 1) # dummy variable
+
+#Compute odds ratios with scaling
+glm_key_odds <- broom::tidy(glm.car) %>%
+filter(term %in% key_terms) %>%
+rowwise() %>%
+mutate(
+scaled_estimate = estimate * scales[term],
+odds_ratio = exp(scaled_estimate),
+pct_change = ifelse(odds_ratio > 1,
+(odds_ratio - 1) * 100, # percent increase
+(1 - odds_ratio) * -100), # percent decrease
+signif = case_when(
+p.value < 0.001 ~ "",
+p.value < 0.01 ~ "",
+p.value < 0.05 ~ "",
+p.value < 0.1 ~ ".",
+TRUE ~ ""
+)
+) %>%
+select(term, odds_ratio, pct_change, p.value, signif)
+
+# Show table
+knitr::kable(glm_key_odds, digits = 3, caption = "GLM Binomial: Key Odds Ratios and Percent Change (scaled)")
+```
+
+**Interpretation of key predictors:**
+
+- **Mileage (`milage_k`)**: Odds ratio > 1 → Higher mileage slightly increases the odds of a reported accident. Specifically, an additional 10,000 miles increases the odds by ~7%, reflecting increased usage and exposure.  
+
+- **Price (`price_dollar`)**: Odds ratio < 1 → Higher-priced vehicles are less likely to have an accident. Each additional $1,000 reduces the odds by ~2%, suggesting that more expensive cars are generally newer or better maintained.  
+
+- **Horsepower (`horsepower`)**: Odds ratio > 1 → More powerful cars slightly increase accident odds. For example, a 50 HP increase raises the odds by ~9.5%, possibly due to more spirited driving.  
+
+- **Fuel type – Electric (`fuel_typeElectric`)**: Odds ratio << 1 → Electric cars have substantially lower odds (~72% lower) of reported accidents compared to the reference fuel type. This effect is partially due to electric cars being newer on average.  
+
+Most other predictors (brand, transmission, cylinders, age) were not statistically significant. These odds ratios provide an intuitive understanding of how each variable affects accident probability, holding all other variables constant.
+
+### 5.4 Conclusions (Binomial GLM)
+
+In conclusion, the logistic regression model indicates that higher mileage and greater horsepower slightly increase the likelihood of a reported accident, while higher-priced vehicles and electric cars are substantially less likely to have an accident history. Cheaper cars tend to have more accidents, likely due to older age, higher usage, fewer safety features, and lower maintenance. Electric cars in the dataset are generally newer, which contributes to their lower accident probability. Other factors such as brand, transmission, cylinders, and age were not statistically significant. The scaled odds ratios provide an intuitive understanding of the magnitude and direction of these effects, offering valuable insights for risk assessment and decision-making in the used car market.
 
 
 ## 6. Generalized Linear Model — Poisson
