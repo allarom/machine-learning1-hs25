@@ -655,8 +655,6 @@ usage-related variables such as mileage and price.
 The Generalised Additive Model identifies mileage as the dominant predictor of accident risk, showing a highly significant and nonlinear relationship with the probability of reported accidents. Vehicle price also matters: lower-priced cars are more likely to have had accidents. Other continuous predictors, including horsepower and age, show no strong independent effects once the nonlinear patterns of mileage and price are accounted for. Most categorical variables brand, fuel type, transmission, and cylinders are not statistically significant, suggesting that accident risk is driven primarily by usage intensity and vehicle value, rather than brand identity. Compared to the linear binomial GLM, the GAM captures nonlinear effects and provides a more nuanced and interpretable view of accident risk, although overall predictive power remains limited due to the inherent randomness of accidents. 
 
 
-
-
 ## SVM model results
 
 We fit radial-kernel SVM regressors on `log_price` using both `e1071::svm` and `kernlab` (via `caret::train`). Both models use the same 80/20 train-test split; hyperparameters are tuned by cross-validation and evaluated on the hold-out test set below.
