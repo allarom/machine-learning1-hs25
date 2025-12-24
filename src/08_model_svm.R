@@ -62,7 +62,33 @@ best_model <- tune_result$best.model
 message(
   "Best SVM parameters: cost=", best_model$cost,
   ", gamma=", best_model$gamma,
-  " (CV error=", round(tune_result$best.performance, 4), ")"
+  " (CV RMSE=", round(sqrt(tune_result$best.performance), 4), ")"
+)
+
+# Visualize tuning surface (CV RMSE) and save to disk
+tune_df <- tibble::as_tibble(tune_result$performances) |>
+  dplyr::rename(cv_mse = error) |>
+  dplyr::mutate(cv_rmse = sqrt(cv_mse))
+
+tune_plot <- ggplot2::ggplot(
+  tune_df,
+  ggplot2::aes(x = factor(cost), y = factor(gamma), fill = cv_rmse)
+) +
+  ggplot2::geom_tile(color = "white") +
+  ggplot2::scale_fill_gradient(low = "#22C55E", high = "#EF4444", name = "CV RMSE") +
+  ggplot2::labs(
+    title = "SVM radial tuning (e1071)",
+    x = "cost",
+    y = "gamma"
+  ) +
+  ggplot2::theme_minimal(base_size = 12)
+
+ggplot2::ggsave(
+  filename = file.path(svm_dir, "svm_tuning_heatmap.png"),
+  plot = tune_plot,
+  width = 6,
+  height = 5,
+  dpi = 300
 )
 
 e1071_pred <- stats::predict(best_model, newdata = test_data)
@@ -96,6 +122,31 @@ message(
   "Best kernlab parameters: C=", kern_model$bestTune$C,
   ", sigma=", kern_model$bestTune$sigma,
   " (CV RMSE=", round(min(kern_model$results$RMSE), 4), ")"
+)
+
+# Visualize caret tuning surface (CV RMSE) and save
+caret_tune_df <- tibble::as_tibble(kern_model$results) |>
+  dplyr::rename(cv_rmse = RMSE)
+
+caret_tune_plot <- ggplot2::ggplot(
+  caret_tune_df,
+  ggplot2::aes(x = factor(C), y = factor(sigma), fill = cv_rmse)
+) +
+  ggplot2::geom_tile(color = "white") +
+  ggplot2::scale_fill_gradient(low = "#22C55E", high = "#EF4444", name = "CV RMSE") +
+  ggplot2::labs(
+    title = "SVM radial tuning (caret/kernlab)",
+    x = "C",
+    y = "sigma"
+  ) +
+  ggplot2::theme_minimal(base_size = 12)
+
+ggplot2::ggsave(
+  filename = file.path(svm_dir, "svm_tuning_heatmap_caret.png"),
+  plot = caret_tune_plot,
+  width = 6,
+  height = 5,
+  dpi = 300
 )
 
 kern_pred <- stats::predict(kern_model, newdata = test_data)
