@@ -70,6 +70,54 @@ nn_caret <- caret::train(
   tuneGrid = nn_grid
 )
 
+best_caret <- nn_caret$bestTune
+best_caret_rmse <- nn_caret$results |>
+  dplyr::filter(size == best_caret$size, decay == best_caret$decay) |>
+  dplyr::slice(1) |>
+  dplyr::pull(RMSE)
+
+caret_tune_df <- tibble::as_tibble(nn_caret$results) |>
+  dplyr::rename(cv_rmse = RMSE)
+
+caret_tune_plot <- ggplot2::ggplot(
+  caret_tune_df,
+  ggplot2::aes(x = factor(size), y = factor(decay), fill = cv_rmse)
+) +
+  ggplot2::geom_tile(color = "white") +
+  ggplot2::geom_point(
+    data = best_caret,
+    ggplot2::aes(x = factor(size), y = factor(decay)),
+    inherit.aes = FALSE,
+    shape = 21,
+    size = 4,
+    stroke = 1.1,
+    fill = "white",
+    color = "black"
+  ) +
+  ggplot2::annotate(
+    "text",
+    x = factor(best_caret$size),
+    y = factor(best_caret$decay),
+    label = paste0("best\nRMSE=", round(best_caret_rmse, 3)),
+    vjust = -1,
+    size = 3.3
+  ) +
+  ggplot2::scale_fill_gradient(low = "#22C55E", high = "#EF4444", name = "CV RMSE") +
+  ggplot2::labs(
+    title = "NN tuning (caret nnet)",
+    x = "Hidden units (size)",
+    y = "Weight decay"
+  ) +
+  ggplot2::theme_minimal(base_size = 12)
+
+ggplot2::ggsave(
+  filename = file.path(nn_dir, "nn_tuning_heatmap_caret.png"),
+  plot = caret_tune_plot,
+  width = 6,
+  height = 5,
+  dpi = 300
+)
+
 caret_pred <- stats::predict(nn_caret, newdata = test_data)
 caret_metrics <- compute_metrics(caret_pred, test_data$log_price) |>
   dplyr::mutate(model = "caret_nnet")

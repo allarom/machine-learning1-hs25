@@ -34,19 +34,21 @@ save_plot <- function(plot, filename, width = 9, height = 6) {
 # Price distribution on the raw scale to show the heavy tail
 price_hist_raw <- cars |>
   ggplot2::ggplot(ggplot2::aes(price_dollar)) +
-  ggplot2::geom_histogram(bins = 40, fill = "#0EA5E9", color = "white", alpha = 0.9) +
+  ggplot2::geom_histogram(bins = 45, fill = "#0EA5E9", color = "white", alpha = 0.9) +
   ggplot2::labs(
     title = "Used car prices (raw scale)",
     x = "Price (USD)",
     y = "Count"
   ) +
+  ggplot2::coord_cartesian(xlim = c(0, 250000)) +
   ggplot2::scale_x_continuous(labels = scales::dollar_format()) +
   ggplot2::theme_minimal(base_size = 12)
 
 # Price distribution on a log scale to tame heavy right tail
 price_hist <- cars |>
   ggplot2::ggplot(ggplot2::aes(price_dollar)) +
-  ggplot2::geom_histogram(bins = 40, fill = "#2563EB", color = "white", alpha = 0.9) +
+  ggplot2::geom_histogram(bins = 45, fill = "#2563EB", color = "white", alpha = 0.9) +
+  ggplot2::coord_cartesian(xlim = c(NA, 250000)) +
   ggplot2::scale_x_log10(labels = scales::dollar_format()) +
   ggplot2::labs(
     title = "Used car prices (log scale)",

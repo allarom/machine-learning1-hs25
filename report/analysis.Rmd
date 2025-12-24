@@ -662,37 +662,39 @@ The Generalised Additive Model identifies mileage as the dominant predictor of a
 
 
 ## 8. SVM model (regression)
-We fit Support Vector Machine (SVM) regression models to predict `log_price`. We used two libraries, which were used in lectures: `e1071` and `kernlab` (via `caret::train`). 
+We fit Support Vector Machine (SVM) regression models to predict `log_price`. We used two libraries: `e1071` and `kernlab` (via `caret::train`). 
 Both models employ a radial kernel to capture non-linear relationships in the data.
 
 ### 8.1 Model specification
 1.  Loads the engineered car data (used_cars_features.csv) and keep the predictors plus `log_price` target.
 2.  Splits the data `80/20` into train/test (seeded for reproducibility).
-3.  Defines a helper to compute RMSE/MAE/R².
+3.  Defines a helper to compute RMSE/MAE/R² .
 4.  Fits two radial SVM regressors:
     - `e1071` svm tuned over a small cost/gamma grid with cross validation. 3-fold cross validation inside tune() selects the best combo on the training split.
-    - `caret` + `svmRadial` (kernlab) tuned over a small C/sigma grid with 3-fold cross validation.
+    - `caret/kernlab` + `svmRadial` tuned over a small C/sigma grid with 3-fold cross validation.
+5. Predict on the held-out test set for each model, compute metrics, and save:
+- Models (svm_log_price_e1071.rds, svm_log_price_kernlab.rds)
+- Test predictions (per model CSVs)
+- Combined metrics RMSE, MAE, R² (svm_log_price_metrics.csv)
 
 ### 8.2 Cross-validation
 
-As you see on the heatmap, some areas have similar green shades, indicating comparable performance across those parameter combinations. However,
+`e1071` As you see on the heatmap, some areas have similar green shades, indicating comparable performance across those parameter combinations. However,
 the lowest RMSE for e1071 was achieved with following parameters: cost=4, gamma=0.05 (CV RMSE=0.2846) 
 
 ```{r svm-heatmap, echo=FALSE, out.width="60%"}
 knitr::include_graphics(here("report", "models", "svm", "svm_tuning_heatmap.png"))
 ```
 
-And here you can see best kernlab parameters: C=2, sigma=0.01 (CV RMSE=0.4298)
+`caret/kernlab` And here you can see best kernlab parameters: C=2, sigma=0.01 (CV RMSE=0.4298)
 ```{r svm-heatmap-caret, echo=FALSE, out.width="60%"}
 knitr::include_graphics(here("report", "models", "svm", "svm_tuning_heatmap_caret.png"))
 ```
 
 
 
-### 8.2 Estimation and overall performance
-Cross-validation setup: both SVMs were tuned with 3-fold cross validation on the training set (same 80/20 split for both).
-You may notice that RMSE values differ between cross validation and test sets. This is expected due to differences in data splits and the nature of cross-validation.
-
+### 8.2 RMSE/MAE/R² on test split
+The radial Support Vector Machine from the e1071 package performs best, showing the smallest average prediction error (RMSE ≈ 0.29) and explaining about 87% of the variation in used-car prices, outperforming the alternative SVM model. SVMs do not yield straightforward coefficient interpretations; they learn support vectors and decision functions in a transformed feature space. 
 ```{r svm-metrics, message=FALSE, echo=FALSE, warning=FALSE}
 svm_metrics <- readr::read_csv(
   here("report", "models", "svm", "svm_log_price_metrics.csv"),
@@ -707,14 +709,10 @@ svm_metrics_wide <- svm_metrics |>
 knitr::kable(svm_metrics_wide, digits = 3, caption = "Test metrics for SVM variants (target: log_price)")
 ```
 
-The `e1071` radial SVM is best by RMSE (~0.290) and R² (~0.868), outperforming the kernlab variant on this split. SVMs do not yield straightforward coefficient interpretations; they learn support vectors and decision functions in a transformed feature space. To understand feature effects you would rely on downstream tools (e.g., partial dependence or SHAP), but within this report we focus on comparative error metrics and note that the tuned radial kernel captures non-linear relationships beyond the linear/log models. 
-
-
-`r svm_best`
-
 
 ### 8.3 Interpretation of results
 
+Both models show strong agreement between predicted and true prices, with points clustering closely around the diagonal and the smooth curve largely overlapping the ideal line, indicating good calibration and limited systematic bias. Slight over-prediction is visible for very low-priced cars and mild under-prediction for the most expensive vehicles, a common pattern in pricing problems. The e1071 radial SVM exhibits marginally tighter clustering and smoother alignment with the diagonal, consistent with its lower RMSE and higher R².
 ```{r svm-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
 pred_e1071 <- readr::read_delim(
   here("report", "models", "svm", "svm_log_price_e1071_predictions.csv"),
@@ -742,7 +740,7 @@ plot_svm <- function(df, title) {
     ggplot2::scale_color_gradient2(
       low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
       midpoint = 0,
-      name = "Residual price (predicted  - true)\nred = under-prediction, grey = correct, green = over-prediction"
+      name = "Residual price (pred - true)\nred = under, grey = near, green = over\n"
     ) +
     ggplot2::labs(
       title = title,
@@ -769,11 +767,17 @@ legend_plot <- ggplot2::ggplot(
   ggplot2::scale_color_gradient2(
     low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
     midpoint = 0,
-    name = "Residual price (predicted  - true)\nred = under-prediction, grey = correct, green = over-prediction"
+    name = "Residual (pred - true)\nred = under, grey = near, green = over\nDashed line: perfect prediction\nBlack curve: average prediction behaviour"
   ) +
-  ggplot2::guides(color = ggplot2::guide_colorbar(barheight = unit(60, "pt"))) +
+  ggplot2::guides(color = ggplot2::guide_colorbar(
+    barheight = unit(60, "pt"),
+    title.theme = ggplot2::element_text(size = 12),
+    label.theme = ggplot2::element_text(size = 11)
+  )) +
   ggplot2::theme_void() +
-  ggplot2::theme(legend.position = "right")
+  ggplot2::theme(
+    legend.position = "right"
+  )
 
 patchwork::wrap_plots(
   p1,
@@ -784,11 +788,30 @@ patchwork::wrap_plots(
 )
 ```
 
-## Neural network results
+## 9. Neural network model (regression)
+We fit two neural networks to predict `log_price`: a caret `nnet` with preprocessing/tuning and a manual `neuralnet` with a shallow hidden layer.
 
-Two regressors on `log_price`: a caret `nnet` (with dummying + scaling, 3-fold cross validation over size/decay) and a manual `neuralnet` (shallow hidden layer). Metrics below come from the test split; cross validation was used only for tuning.
+### 9.1 Model specification
+- Load the engineered data and keep predictors plus `log_price`.
+- Split 80/20 into train/test (seeded).
+- caret `nnet`: recipe with dummy variables + zero-variance filter + centering/scaling; 3-fold cross validation over a small size/decay grid; `maxit=300`.
+- manual `neuralnet`: one hidden layer (4 units) on scaled/dummified matrix, with optional subsampling for speed.
+- Save models, per-model predictions, and combined metrics to `report/models/nn`.
 
-```{r nn-metrics, message=FALSE}
+### 9.2 Cross-validation
+- caret tuning uses 3-fold cross validation on the training split to choose size/decay; the manual `neuralnet` uses fixed architecture (no CV tuning).
+- CV metrics come from training folds; test metrics come from the untouched 20% hold-out.
+- Only one heatmap is shown because only the caret model does a grid search; the manual neuralnet keeps a single, simple layout without tuning.
+
+Best caret grid point: `size = 5`, `decay = 0.001` (CV RMSE ≈ 0.372). The white/black marker on the heatmap highlights this combination.
+
+```{r nn-heatmap-caret, echo=FALSE, out.width="60%"}
+knitr::include_graphics(here("report", "models", "nn", "nn_tuning_heatmap_caret.png"))
+```
+
+### 9.3 RMSE/MAE/R² on test split
+The caret-based neural network performs better than the manually specified variant, achieving a smaller average prediction error (RMSE ≈ 0.37) and explaining about 79% of the variation in used-car prices (R² ≈ 0.79). The manually specified neural network shows weaker predictive performance, with larger errors (RMSE ≈ 0.41) and a lower proportion of explained variance (R² ≈ 0.74). Neural networks do not provide easily interpretable coefficients; instead, they learn complex non-linear relationships between vehicle characteristics and prices through layered transformations.
+```{r nn-metrics, message=FALSE, echo=FALSE}
 nn_metrics <- readr::read_csv(
   here("report", "models", "nn", "nn_log_price_metrics.csv"),
   show_col_types = FALSE
@@ -802,8 +825,12 @@ nn_metrics_wide <- nn_metrics |>
 knitr::kable(nn_metrics_wide, digits = 3, caption = "Test metrics for NN variants (target: log_price)")
 ```
 
-`r nn_best` — the manual `neuralnet` edge is small (RMSE ≈ 0.388 vs. 0.392), so both nets are in a similar error band; the manual net slightly reduces bias on the high end (see fewer large positive residuals).
+### 9.4 Interpretation of results
+Both neural network models capture the strong relationship between observed and predicted log-transformed prices, indicating that the main structure of the data is well learned. Predictions are generally accurate across the central price range, where most observations lie, with limited overall bias.
 
+The caret-based neural network shows more stable and consistent performance across different price levels. In contrast, the manually specified neural network exhibits greater variability in its predictions, particularly for higher-priced vehicles, where underestimation is more pronounced.
+
+Overall, while both neural networks perform well, the caret implementation delivers more reliable predictions across the full price range and is therefore preferred in this analysis.
 ```{r nn-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
 pred_caret <- readr::read_delim(
   here("report", "models", "nn", "nn_log_price_caret_predictions.csv"),
@@ -831,7 +858,7 @@ plot_nn <- function(df, title) {
     ggplot2::scale_color_gradient2(
       low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
       midpoint = 0,
-      name = "Residual (pred - true)"
+      name = "Residual (pred - true)\nred = under-prediction, grey = near, green = over-prediction\nDashed line: perfect prediction\nBlack curve: average prediction behaviour"
     ) +
     ggplot2::labs(
       title = title,
@@ -857,11 +884,17 @@ legend_plot_nn <- ggplot2::ggplot(
   ggplot2::scale_color_gradient2(
     low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
     midpoint = 0,
-    name = "Residual (pred - true)\nred = under-prediction, grey = correct, green = over-prediction"
+    name = "Residual (pred - true)\nred = under-prediction, grey = near, green = over-prediction\nDashed line: perfect prediction\nBlack curve: average prediction behaviour"
   ) +
-  ggplot2::guides(color = ggplot2::guide_colorbar(barheight = unit(60, "pt"))) +
+  ggplot2::guides(color = ggplot2::guide_colorbar(
+    barheight = unit(60, "pt"),
+    title.theme = ggplot2::element_text(size = 12),
+    label.theme = ggplot2::element_text(size = 11)
+  )) +
   ggplot2::theme_void() +
-  ggplot2::theme(legend.position = "right")
+  ggplot2::theme(
+    legend.position = "right"
+  )
 
 patchwork::wrap_plots(
   p1,
