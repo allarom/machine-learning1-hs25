@@ -382,6 +382,8 @@ summary(glm.car)
 
 We scale and exponentiate the coefficients of the binomial GLM to obtain **odds ratios**, which show how the odds of a car having an accident history change with each predictor.
 
+To improve interpretability, continuous predictors are rescaled before computing odds ratios. This rescaling does not affect statistical significance or model fit, only the unit of interpretation.
+
 The data were scaled as follows:
 
 - `milage_k` was multiplied by 10.
@@ -429,15 +431,15 @@ knitr::kable(glm_key_odds, digits = 3, caption = "GLM Binomial: Key Odds Ratios 
 
 - **Price (`price_dollar`)**: Odds ratio < 1 → Higher-priced vehicles are less likely to have an accident. Each additional $1,000 reduces the odds by ~2%, suggesting that more expensive cars are generally newer or better maintained.  
 
-- **Horsepower (`horsepower`)**: Odds ratio > 1 → More powerful cars slightly increase accident odds. For example, a 50 HP increase raises the odds by ~9.5%, possibly due to more spirited driving.  
+- **Horsepower (`horsepower`)**: Odds ratio > 1 → More powerful cars slightly increase accident odds. For example, a 50 HP increase raises the odds by ~9.5%, possibly due to more spirited driving.
 
-- **Fuel type – Electric (`fuel_typeElectric`)**: Odds ratio << 1 → Electric cars have substantially lower odds (~72% lower) of reported accidents compared to the reference fuel type. This effect is partially due to electric cars being newer on average.  
+- **Fuel type – Electric (`fuel_typeElectric`)**: Odds ratio << 1 → Electric cars have substantially lower odds (≈ 72 % lower) of reported accidents compared to the reference fuel type. This effect should be interpreted cautiously, as electric vehicles in this dataset are generally newer and may benefit from modern safety technologies.
 
-Most other predictors (brand, transmission, cylinders, age) were not statistically significant. These odds ratios provide an intuitive understanding of how each variable affects accident probability, holding all other variables constant.
+These odds ratios allow for an intuitive interpretation of how each variable affects accident probability, holding all other variables constant. Most other predictors (brand, transmission, cylinders, age) were not statistically significant in this model.
 
 ### 5.4 Conclusions (Binomial GLM)
 
-In conclusion, the logistic regression model indicates that higher mileage and greater horsepower slightly increase the likelihood of a reported accident, while higher-priced vehicles and electric cars are substantially less likely to have an accident history. Cheaper cars tend to have more accidents, likely due to older age, higher usage, fewer safety features, and lower maintenance. Electric cars in the dataset are generally newer, which contributes to their lower accident probability. Other factors such as brand, transmission, cylinders, and age were not statistically significant. The scaled odds ratios provide an intuitive understanding of the magnitude and direction of these effects, offering valuable insights for risk assessment and decision-making in the used car market.
+The binomial GLM indicates that accident probability is primarily driven by vehicle usage and value. Higher mileage and higher horsepower are associated with increased accident odds, while higher-priced cars are less likely to have a reported accident history. This is consistent with the intuition that cheaper cars tend to be older, more heavily used, and exposed to greater wear and risk. Electric vehicles exhibit substantially lower accident odds in the model. However, this result is likely influenced by sample composition: electric cars in the dataset are generally newer and therefore have had less exposure time to accidents. The observed fuel-type effect may therefore partially reflect vehicle age rather than an intrinsic safety advantage. Overall, the GLM provides a transparent and interpretable baseline model for accident risk. Its linear structure, however, limits its ability to capture nonlinear exposure effects, motivating the use of a Generalised Additive Model in the next section.
 
 
 ## 6. Generalized Linear Model — Poisson
@@ -559,6 +561,104 @@ quasi-Poisson or negative binomial model may be more appropriate.
 
 
 ## 7. Generalised Additive Model (GAM)
+
+To relax the linearity assumption of the binomial GLM, we fit a **Generalised Additive Model (GAM)** to predict whether a car has had at least one reported accident (accident_bin). The GAM allows for **non-linear relationships** between key continuous predictors and accident probability, while retaining interpretable parametric effects for categorical variables. 
+
+### 7.1 Model specification
+
+We model accident history using a GAM with a binomial family and logit link:
+
+`accident_bin ~ brand + fuel_type + transmission + cylinders + s(milage_k) + s(price_dollar) + s(horsepower) + s(age)`
+
+Where:
+- `accident_bin` is a binary response (0 = no reported accident, 1 = at least one reported accident).
+- `brand`, `fuel_type`, and `transmission` are categorical predictors.
+- `cylinders` enters the model linearly.
+- `s(milage_k)`, `s(price_dollar)`, `s(horsepower)`, and `s(age)` are smooth
+  spline functions capturing potential nonlinear effects.
+- The model is estimated using penalised likelihood with REML.
+
+### 7.2 Model fitting and summary
+
+Smoothness is selected automatically via REML, reducing the risk of overfitting despite flexible spline terms.
+
+```{r gam-accident-fit, message=FALSE, warning=FALSE}
+source(here::here("src", "07_model_gam.R"))
+
+# Show a full summary of the model
+summary(gam.car)
+```
+
+The summary output reports estimated degrees of freedom (EDF) and approximate significance tests for each smooth term.
+
+### 7.3 Interpretation of smooth effects
+
+The GAM summary reports estimated degrees of freedom (EDF) and significance
+tests for each smooth term, indicating whether nonlinear effects are present.
+
+- **Mileage (`s(milage_k)`)**  
+  Mileage shows a **highly significant and strongly nonlinear effect** on
+  accident probability (EDF ≈ 5.7, p < 2e−16). The relatively large EDF indicates
+  a complex relationship: accident risk does not increase at a constant rate
+  with mileage. Instead, the effect varies across usage levels, reflecting
+  changing exposure and driving patterns over a vehicle’s lifetime.
+
+- **Price (`s(price_dollar)`)**  
+  Price has a **statistically significant smooth effect** (EDF ≈ 2.3,
+  p = 0.0028). While the effect is nonlinear, its lower EDF suggests a shape
+  close to linear. Higher-priced vehicles tend to have a lower probability of
+  reported accidents, consistent with newer vehicles, better maintenance, and
+  improved safety features.
+
+- **Horsepower (`s(horsepower)`)**  
+  The smooth effect of horsepower is **not statistically significant**
+  (p = 0.216). Although horsepower is modelled flexibly, the data provide no
+  strong evidence that engine power independently affects accident probability
+  once mileage, price, and other characteristics are controlled for.
+
+- **Age (`s(age)`)**  
+  The smooth effect of age is **marginally insignificant** (p = 0.078). This
+  suggests that age alone does not strongly predict accident probability after
+  accounting for mileage and vehicle characteristics. Much of the age-related
+  risk appears to be captured indirectly through mileage.
+
+Overall, mileage and price emerge as the most important nonlinear predictors of
+accident history in the GAM.
+
+### 7.4 Interpretation of parametric effects
+
+The parametric terms (brand, fuel type, transmission, and cylinders) are
+interpreted as in a standard logistic regression, holding all smooth effects
+constant.
+
+- **Brand effects**  
+  Most brand coefficients are not statistically significant, indicating limited
+  brand-specific differences in accident probability after controlling for
+  mileage, price, and other variables. One exception is **MINI**, which shows a
+  significantly lower accident probability compared to the reference brand
+  (p = 0.044).
+
+- **Fuel type**  
+  Fuel type coefficients are not statistically significant. Electric vehicles
+  show a negative coefficient, suggesting lower accident odds, but this effect
+  is not significant once nonlinear mileage and price effects are accounted for.
+
+- **Transmission**  
+  Manual transmission does not have a statistically significant effect on
+  accident probability in this model.
+
+- **Cylinders**  
+  The number of cylinders enters linearly and is not statistically significant,
+  suggesting little direct impact on accident risk.
+
+Overall, categorical vehicle characteristics play a secondary role compared to
+usage-related variables such as mileage and price.
+
+### 7.5 Conclusions (GAM)
+
+The Generalised Additive Model identifies mileage as the dominant predictor of accident risk, showing a highly significant and nonlinear relationship with the probability of reported accidents. Vehicle price also matters: lower-priced cars are more likely to have had accidents. Other continuous predictors, including horsepower and age, show no strong independent effects once the nonlinear patterns of mileage and price are accounted for. Most categorical variables brand, fuel type, transmission, and cylinders are not statistically significant, suggesting that accident risk is driven primarily by usage intensity and vehicle value, rather than brand identity. Compared to the linear binomial GLM, the GAM captures nonlinear effects and provides a more nuanced and interpretable view of accident risk, although overall predictive power remains limited due to the inherent randomness of accidents. 
+
+
 
 
 ## 8. SVM model (regression)
