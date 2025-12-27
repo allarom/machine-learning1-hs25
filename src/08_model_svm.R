@@ -4,6 +4,7 @@
 # test set, and saves both fitted models plus metrics/predictions for comparison.
 
 source("src/00_load_packages.R")
+source("src/helpers.R")
 
 data_path <- here::here("data", "processed", "used_cars_features.csv")
 
@@ -29,10 +30,10 @@ model_data <- cars |>
     accident_bin = factor(accident_bin)
   )
 
-set.seed(42)
-split <- rsample::initial_split(model_data, prop = 0.8)
-train_data <- rsample::training(split)
-test_data <- rsample::testing(split)
+split <- get_train_test_split(nrow(model_data), prop = 0.8, seed = 42)
+parts <- apply_split(model_data, split)
+train_data <- parts$train
+test_data <- parts$test
 
 compute_metrics <- function(pred, truth) {
   results_tbl <- tibble::tibble(truth = truth, estimate = as.numeric(pred))
