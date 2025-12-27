@@ -1,8 +1,6 @@
 ---
 title: "Used Cars – Applied ML Project"
-output:
-  html_document:
-    css: "styles.css"
+output: html_document
 ---
 
 <!-- Load libraries -->
@@ -145,6 +143,189 @@ knitr::include_graphics(here("report", "plots", "accident_vs_price.png"))
 
 Cars with reported accidents trade at a clear discount relative to clean histories, even after log-scaling prices, confirming accident history as an important predictor.
 
+## SVM model results
+
+We fit radial-kernel SVM regressors on `log_price` using both `e1071::svm` and `kernlab` (via `caret::train`). Both models use the same 80/20 train-test split; hyperparameters are tuned by cross-validation and evaluated on the hold-out test set below.
+
+```{r svm-metrics, message=FALSE}
+svm_metrics <- readr::read_csv(
+  here("report", "models", "svm", "svm_log_price_metrics.csv"),
+  show_col_types = FALSE
+)
+
+svm_best <- readr::read_lines(here("report", "models", "svm", "svm_best_model.txt"))[1]
+
+svm_metrics_wide <- svm_metrics |>
+  tidyr::pivot_wider(names_from = .metric, values_from = .estimate)
+
+knitr::kable(svm_metrics_wide, digits = 3, caption = "Test metrics for SVM variants (target: log_price)")
+```
+
+The `e1071` radial SVM is best by RMSE (~0.290) and R² (~0.868), outperforming the kernlab variant on this split. SVMs do not yield straightforward coefficient interpretations; they learn support vectors and decision functions in a transformed feature space. To understand feature effects you would rely on downstream tools (e.g., partial dependence or SHAP), but within this report we focus on comparative error metrics and note that the tuned radial kernel captures non-linear relationships beyond the linear/log models. 
+
+Cross-validation setup: both SVMs were tuned with 3-fold cross validation on the training set (same 80/20 split for both). `e1071::tune()` searched a compact grid of `cost` and `gamma`; `caret::train(method = "svmRadial")` searched a grid of `C` and `sigma`. Final metrics shown above are from the untouched test set, so cross validation was only for hyperparameter selection.
+
+`r svm_best`
+
+```{r svm-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
+pred_e1071 <- readr::read_delim(
+  here("report", "models", "svm", "svm_log_price_e1071_predictions.csv"),
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  dplyr::mutate(model = "e1071_radial")
+
+pred_kern <- readr::read_delim(
+  here("report", "models", "svm", "svm_log_price_kernlab_predictions.csv"),
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  dplyr::mutate(model = "kernlab_radial")
+
+plot_svm <- function(df, title) {
+  df <- df |>
+    dplyr::mutate(resid = pred_log_price - log_price)
+
+  ggplot2::ggplot(df, ggplot2::aes(x = log_price, y = pred_log_price, color = resid)) +
+    ggplot2::geom_point(alpha = 0.7, size = 1.4) +
+    ggplot2::geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 0.8) +
+    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
+    ggplot2::coord_equal() +
+    ggplot2::scale_color_gradient2(
+      low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
+      midpoint = 0,
+      name = "Residual price (predicted  - true)\nred = under-prediction, grey = correct, green = over-prediction"
+    ) +
+    ggplot2::labs(
+      title = title,
+      x = "True log(price)",
+      y = "Predicted log(price)"
+    ) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      legend.position = "none",
+      plot.title.position = "plot",
+      plot.title = ggplot2::element_text(hjust = 0, vjust= -20)
+    )
+}
+
+p1 <- plot_svm(pred_e1071, "e1071 radial SVM:\n predicted vs true")
+p2 <- plot_svm(pred_kern, "kernlab radial SVM:\n predicted vs true")
+
+# Standalone legend using the same residual scale
+legend_plot <- ggplot2::ggplot(
+  data.frame(resid = c(-0.5, 0, 0.5), x = 1, y = 1),
+  ggplot2::aes(x = x, y = y, color = resid)
+) +
+  ggplot2::geom_point(alpha = 0) + # invisible points; legend only
+  ggplot2::scale_color_gradient2(
+    low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
+    midpoint = 0,
+    name = "Residual price (predicted  - true)\nred = under-prediction, grey = correct, green = over-prediction"
+  ) +
+  ggplot2::guides(color = ggplot2::guide_colorbar(barheight = unit(60, "pt"))) +
+  ggplot2::theme_void() +
+  ggplot2::theme(legend.position = "right")
+
+patchwork::wrap_plots(
+  p1,
+  p2,
+  legend_plot,
+  ncol = 3,
+  widths = c(1, 1, 0.22)
+)
+```
+
+## Neural network results
+
+Two regressors on `log_price`: a caret `nnet` (with dummying + scaling, 3-fold cross validation over size/decay) and a manual `neuralnet` (shallow hidden layer). Metrics below come from the test split; cross validation was used only for tuning.
+
+```{r nn-metrics, message=FALSE}
+nn_metrics <- readr::read_csv(
+  here("report", "models", "nn", "nn_log_price_metrics.csv"),
+  show_col_types = FALSE
+)
+
+nn_best <- readr::read_lines(here("report", "models", "nn", "nn_best_model.txt"))[1]
+
+nn_metrics_wide <- nn_metrics |>
+  tidyr::pivot_wider(names_from = .metric, values_from = .estimate)
+
+knitr::kable(nn_metrics_wide, digits = 3, caption = "Test metrics for NN variants (target: log_price)")
+```
+
+`r nn_best` — the manual `neuralnet` edge is small (RMSE ≈ 0.388 vs. 0.392), so both nets are in a similar error band; the manual net slightly reduces bias on the high end (see fewer large positive residuals).
+
+```{r nn-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
+pred_caret <- readr::read_delim(
+  here("report", "models", "nn", "nn_log_price_caret_predictions.csv"),
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  dplyr::mutate(model = "caret_nnet")
+
+pred_manual <- readr::read_delim(
+  here("report", "models", "nn", "nn_log_price_neuralnet_predictions.csv"),
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  dplyr::mutate(model = "neuralnet_manual")
+
+plot_nn <- function(df, title) {
+  df <- df |>
+    dplyr::mutate(resid = pred_log_price - log_price)
+
+  ggplot2::ggplot(df, ggplot2::aes(x = log_price, y = pred_log_price, color = resid)) +
+    ggplot2::geom_point(alpha = 0.7, size = 1.4) +
+    ggplot2::geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 0.8) +
+    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
+    ggplot2::coord_equal() +
+    ggplot2::scale_color_gradient2(
+      low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
+      midpoint = 0,
+      name = "Residual (pred - true)"
+    ) +
+    ggplot2::labs(
+      title = title,
+      x = "True log(price)",
+      y = "Predicted log(price)"
+    ) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      legend.position = "none",
+      plot.title.position = "plot",
+      plot.title = ggplot2::element_text(hjust = 0, vjust= -20)
+    )
+}
+
+p1 <- plot_nn(pred_caret, "caret nnet: predicted vs true")
+p2 <- plot_nn(pred_manual, "neuralnet manual: predicted vs true")
+
+legend_plot_nn <- ggplot2::ggplot(
+  data.frame(resid = c(-0.5, 0, 0.5), x = 1, y = 1),
+  ggplot2::aes(x = x, y = y, color = resid)
+) +
+  ggplot2::geom_point(alpha = 0) +
+  ggplot2::scale_color_gradient2(
+    low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
+    midpoint = 0,
+    name = "Residual (pred - true)\nred = under-prediction, grey = correct, green = over-prediction"
+  ) +
+  ggplot2::guides(color = ggplot2::guide_colorbar(barheight = unit(60, "pt"))) +
+  ggplot2::theme_void() +
+  ggplot2::theme(legend.position = "right")
+
+patchwork::wrap_plots(
+  p1,
+  p2,
+  legend_plot_nn,
+  ncol = 3,
+  widths = c(1, 1, 0.22)
+)
+```
+
+
+
 ## 4. Linear regression model
 
 
@@ -209,6 +390,14 @@ source(here::here("src", "04_model_linear.R"))
 broom::tidy(lm_linear) |> 
   dplyr::slice(1:10)  # show only first 10 coefficients
 
+```
+
+```{r linear-metrics, echo=FALSE}
+tibble::tibble(
+  metric = c("RMSE (log-price)", "R² (log-price)"),
+  value  = c(lm_linear_rmse_log, lm_linear_r2_log)
+) |>
+  knitr::kable(digits = 3)
 ```
 
 ### 4.3 Interpretation of selected coefficients
@@ -334,112 +523,6 @@ interactions or nonlinear effects) might capture the remaining structure
 in the data even better.
 
 
-## 5. Generalized Linear Model — Binomial (Logistic Regression)
-
-A binomial Generalized Linear Model (GLM) is appropriate when the **response
-variable is binary**.  
-Here, the response variable is:
-
-- `accident_bin`
-  - `1` = car has had at least one reported accident
-  - `0` = no reported accident
-
-The model estimates the **probability that a used car has an accident history**
-based on vehicle characteristics.
-
-### 5.1 Model specification
-
-We model accident history using a **logistic regression** with a logit link:
-
-\[
-\log\left(\frac{P(\text{accident}=1)}{1 - P(\text{accident}=1)}\right)
-= \beta_0 + \beta_1 X_1 + \dots + \beta_p X_p
-\]
-
-Model formula:
-
-`accident_bin ~ brand + age + milage_k + fuel_type + transmission +
-price_dollar + horsepower + cylinders`
-
-- **Response**: `accident_bin` (binary)
-- **Predictors**:
-  - Continuous: age, mileage (1,000 miles), price, horsepower, cylinders
-  - Categorical: brand, fuel type, transmission
-- **Link function**: logit
-
-
-### 5.2 Model fitting and summary
-
-```{r glm-fit, message=FALSE, warning=FALSE}
-# Source the script that fits the binomial GLM
-source(here::here("src", "05_model_glm_binomial.R"))
-
-# Show a full summary of the model 
-summary(glm.car)
-```
-
-### 5.3 Key Odds Ratios and Interpretation
-
-We scale and exponentiate the coefficients of the binomial GLM to obtain **odds ratios**, which show how the odds of a car having an accident history change with each predictor.
-
-To improve interpretability, continuous predictors are rescaled before computing odds ratios. This rescaling does not affect statistical significance or model fit, only the unit of interpretation.
-
-The data were scaled as follows:
-
-- `milage_k` was multiplied by 10.
-- `price_dollar` was multiplied by 1,000.
-- `horsepower` was multiplied by 50.
-
-```{r glm-key-odds, message=FALSE, echo=FALSE, warning=FALSE}
-
-#Key predictors
-key_terms <- c("milage_k", "price_dollar", "horsepower", "fuel_typeElectric")
-
-#Scaling factors for interpretability
-scales <- c(milage_k = 10, # 10k miles
-price_dollar = 1000, # $1000
-horsepower = 50, # 50 HP
-fuel_typeElectric = 1) # dummy variable
-
-#Compute odds ratios with scaling
-glm_key_odds <- broom::tidy(glm.car) %>%
-filter(term %in% key_terms) %>%
-rowwise() %>%
-mutate(
-scaled_estimate = estimate * scales[term],
-odds_ratio = exp(scaled_estimate),
-pct_change = ifelse(odds_ratio > 1,
-(odds_ratio - 1) * 100, # percent increase
-(1 - odds_ratio) * -100), # percent decrease
-signif = case_when(
-p.value < 0.001 ~ "",
-p.value < 0.01 ~ "",
-p.value < 0.05 ~ "",
-p.value < 0.1 ~ ".",
-TRUE ~ ""
-)
-) %>%
-select(term, odds_ratio, pct_change, p.value, signif)
-
-# Show table
-knitr::kable(glm_key_odds, digits = 3, caption = "GLM Binomial: Key Odds Ratios and Percent Change (scaled)")
-```
-
-**Interpretation of key predictors:**
-
-- **Mileage (`milage_k`)**: Odds ratio > 1 → Higher mileage slightly increases the odds of a reported accident. Specifically, an additional 10,000 miles increases the odds by ~7%, reflecting increased usage and exposure.  
-
-- **Price (`price_dollar`)**: Odds ratio < 1 → Higher-priced vehicles are less likely to have an accident. Each additional $1,000 reduces the odds by ~2%, suggesting that more expensive cars are generally newer or better maintained.  
-
-- **Horsepower (`horsepower`)**: Odds ratio > 1 → More powerful cars slightly increase accident odds. For example, a 50 HP increase raises the odds by ~9.5%, possibly due to more spirited driving.
-
-- **Fuel type – Electric (`fuel_typeElectric`)**: Odds ratio << 1 → Electric cars have substantially lower odds (≈ 72 % lower) of reported accidents compared to the reference fuel type. This effect should be interpreted cautiously, as electric vehicles in this dataset are generally newer and may benefit from modern safety technologies.
-
-These odds ratios allow for an intuitive interpretation of how each variable affects accident probability, holding all other variables constant. Most other predictors (brand, transmission, cylinders, age) were not statistically significant in this model.
-
-### 5.4 Conclusions (Binomial GLM)
-
-The binomial GLM indicates that accident probability is primarily driven by vehicle usage and value. Higher mileage and higher horsepower are associated with increased accident odds, while higher-priced cars are less likely to have a reported accident history. This is consistent with the intuition that cheaper cars tend to be older, more heavily used, and exposed to greater wear and risk. Electric vehicles exhibit substantially lower accident odds in the model. However, this result is likely influenced by sample composition: electric cars in the dataset are generally newer and therefore have had less exposure time to accidents. The observed fuel-type effect may therefore partially reflect vehicle age rather than an intrinsic safety advantage. Overall, the GLM provides a transparent and interpretable baseline model for accident risk. Its linear structure, however, limits its ability to capture nonlinear exposure effects, motivating the use of a Generalised Additive Model in the next section.
 
 
 ## 6. Generalized Linear Model — Poisson
@@ -477,7 +560,6 @@ We fit the Poisson GLM by sourcing `src/06_model_glm_poisson.R`, which:
 ```{r poisson-fit, message=FALSE, warning=FALSE}
 source(here::here("src", "06_model_glm_poisson.R"))
 
-# compact coefficient table incl. significance stars
 poisson_tbl <- broom::tidy(glm_poisson) |>
   dplyr::mutate(
     signif = dplyr::case_when(
@@ -488,10 +570,10 @@ poisson_tbl <- broom::tidy(glm_poisson) |>
       TRUE            ~ ""
     )
   )
-
 poisson_tbl |>
   dplyr::select(term, estimate, std.error, statistic, p.value, signif) |>
   dplyr::slice(1:12)
+					
 ```
 
 ```{r poisson-metrics, echo=FALSE, message=FALSE, warning=FALSE}
@@ -504,6 +586,7 @@ data.frame(
   pseudo_R2_deviance = pseudo_r2,
   dispersion_pearson = dispersion
 )
+
 ```
 
 If the **dispersion** is clearly above 1, the Poisson variance assumption
@@ -513,7 +596,8 @@ comparability and interpretation practice.
 
 ### 6.3 Interpretation of selected coefficients
 
-In a Poisson GLM with log link:
+In a Poisson GLM with a log link, coefficients are interpreted multiplicatively:
+`exp(beta)` is the factor change in the expected count.
 
 - `exp(beta) > 1` → expected count increases  
 - `exp(beta) < 1` → expected count decreases  
@@ -532,9 +616,12 @@ effects_tbl |>
   dplyr::filter(term %in% selected_terms) |>
   dplyr::select(term, estimate, rate_ratio, pct_change, p.value) |>
   dplyr::mutate(
+    estimate   = round(estimate, 4),
     rate_ratio = round(rate_ratio, 3),
-    pct_change = round(pct_change, 1)
-  )
+    pct_change = round(pct_change, 1),
+    p.value    = signif(p.value, 3)
+  ) |>
+  knitr::kable()
 ```
 
 ### 6.4 Residual diagnostics
@@ -558,349 +645,3 @@ and interpret effects as multiplicative changes via `exp(beta)`. While
 GLM estimation, interpretation, and basic diagnostics. In a real client setting
 with genuine count outcomes, overdispersion should be checked carefully and a
 quasi-Poisson or negative binomial model may be more appropriate.
-
-
-## 7. Generalised Additive Model (GAM)
-
-To relax the linearity assumption of the binomial GLM, we fit a **Generalised Additive Model (GAM)** to predict whether a car has had at least one reported accident (accident_bin). The GAM allows for **non-linear relationships** between key continuous predictors and accident probability, while retaining interpretable parametric effects for categorical variables. 
-
-### 7.1 Model specification
-
-We model accident history using a GAM with a binomial family and logit link:
-
-`accident_bin ~ brand + fuel_type + transmission + cylinders + s(milage_k) + s(price_dollar) + s(horsepower) + s(age)`
-
-Where:
-- `accident_bin` is a binary response (0 = no reported accident, 1 = at least one reported accident).
-- `brand`, `fuel_type`, and `transmission` are categorical predictors.
-- `cylinders` enters the model linearly.
-- `s(milage_k)`, `s(price_dollar)`, `s(horsepower)`, and `s(age)` are smooth
-  spline functions capturing potential nonlinear effects.
-- The model is estimated using penalised likelihood with REML.
-
-### 7.2 Model fitting and summary
-
-Smoothness is selected automatically via REML, reducing the risk of overfitting despite flexible spline terms.
-
-```{r gam-accident-fit, message=FALSE, warning=FALSE}
-source(here::here("src", "07_model_gam.R"))
-
-# Show a full summary of the model
-summary(gam.car)
-```
-
-The summary output reports estimated degrees of freedom (EDF) and approximate significance tests for each smooth term.
-
-### 7.3 Interpretation of smooth effects
-
-The GAM summary reports estimated degrees of freedom (EDF) and significance
-tests for each smooth term, indicating whether nonlinear effects are present.
-
-- **Mileage (`s(milage_k)`)**  
-  Mileage shows a **highly significant and strongly nonlinear effect** on
-  accident probability (EDF ≈ 5.7, p < 2e−16). The relatively large EDF indicates
-  a complex relationship: accident risk does not increase at a constant rate
-  with mileage. Instead, the effect varies across usage levels, reflecting
-  changing exposure and driving patterns over a vehicle’s lifetime.
-
-- **Price (`s(price_dollar)`)**  
-  Price has a **statistically significant smooth effect** (EDF ≈ 2.3,
-  p = 0.0028). While the effect is nonlinear, its lower EDF suggests a shape
-  close to linear. Higher-priced vehicles tend to have a lower probability of
-  reported accidents, consistent with newer vehicles, better maintenance, and
-  improved safety features.
-
-- **Horsepower (`s(horsepower)`)**  
-  The smooth effect of horsepower is **not statistically significant**
-  (p = 0.216). Although horsepower is modelled flexibly, the data provide no
-  strong evidence that engine power independently affects accident probability
-  once mileage, price, and other characteristics are controlled for.
-
-- **Age (`s(age)`)**  
-  The smooth effect of age is **marginally insignificant** (p = 0.078). This
-  suggests that age alone does not strongly predict accident probability after
-  accounting for mileage and vehicle characteristics. Much of the age-related
-  risk appears to be captured indirectly through mileage.
-
-Overall, mileage and price emerge as the most important nonlinear predictors of
-accident history in the GAM.
-
-### 7.4 Interpretation of parametric effects
-
-The parametric terms (brand, fuel type, transmission, and cylinders) are
-interpreted as in a standard logistic regression, holding all smooth effects
-constant.
-
-- **Brand effects**  
-  Most brand coefficients are not statistically significant, indicating limited
-  brand-specific differences in accident probability after controlling for
-  mileage, price, and other variables. One exception is **MINI**, which shows a
-  significantly lower accident probability compared to the reference brand
-  (p = 0.044).
-
-- **Fuel type**  
-  Fuel type coefficients are not statistically significant. Electric vehicles
-  show a negative coefficient, suggesting lower accident odds, but this effect
-  is not significant once nonlinear mileage and price effects are accounted for.
-
-- **Transmission**  
-  Manual transmission does not have a statistically significant effect on
-  accident probability in this model.
-
-- **Cylinders**  
-  The number of cylinders enters linearly and is not statistically significant,
-  suggesting little direct impact on accident risk.
-
-Overall, categorical vehicle characteristics play a secondary role compared to
-usage-related variables such as mileage and price.
-
-### 7.5 Conclusions (GAM)
-
-The Generalised Additive Model identifies mileage as the dominant predictor of accident risk, showing a highly significant and nonlinear relationship with the probability of reported accidents. Vehicle price also matters: lower-priced cars are more likely to have had accidents. Other continuous predictors, including horsepower and age, show no strong independent effects once the nonlinear patterns of mileage and price are accounted for. Most categorical variables brand, fuel type, transmission, and cylinders are not statistically significant, suggesting that accident risk is driven primarily by usage intensity and vehicle value, rather than brand identity. Compared to the linear binomial GLM, the GAM captures nonlinear effects and provides a more nuanced and interpretable view of accident risk, although overall predictive power remains limited due to the inherent randomness of accidents. 
-
-
-
-
-## 8. SVM model (regression)
-We fit Support Vector Machine (SVM) regression models to predict `log_price`. We used two libraries: `e1071` and `kernlab` (via `caret::train`). 
-Both models employ a radial kernel to capture non-linear relationships in the data.
-
-### 8.1 Model specification
-1.  Loads the engineered car data (used_cars_features.csv) and keep the predictors plus `log_price` target.
-2.  Splits the data `80/20` into train/test (seeded for reproducibility).
-3.  Defines a helper to compute RMSE/MAE/R² .
-4.  Fits two radial SVM regressors:
-    - `e1071` svm tuned over a small cost/gamma grid with cross validation. 3-fold cross validation inside tune() selects the best combo on the training split.
-    - `caret/kernlab` + `svmRadial` tuned over a small C/sigma grid with 3-fold cross validation.
-5. Predict on the held-out test set for each model, compute metrics, and save:
-- Models (svm_log_price_e1071.rds, svm_log_price_kernlab.rds)
-- Test predictions (per model CSVs)
-- Combined metrics RMSE, MAE, R² (svm_log_price_metrics.csv)
-
-### 8.2 Cross-validation
-
-`e1071` As you see on the heatmap, some areas have similar green shades, indicating comparable performance across those parameter combinations. However,
-the lowest RMSE for e1071 was achieved with following parameters: cost=4, gamma=0.05 (CV RMSE=0.2846) 
-
-```{r svm-heatmap, echo=FALSE, out.width="60%"}
-knitr::include_graphics(here("report", "models", "svm", "svm_tuning_heatmap.png"))
-```
-
-`caret/kernlab` And here you can see best kernlab parameters: C=2, sigma=0.01 (CV RMSE=0.4298)
-```{r svm-heatmap-caret, echo=FALSE, out.width="60%"}
-knitr::include_graphics(here("report", "models", "svm", "svm_tuning_heatmap_caret.png"))
-```
-
-
-
-### 8.2 RMSE/MAE/R² on test split
-The radial Support Vector Machine from the e1071 package performs best, showing the smallest average prediction error (RMSE ≈ 0.29) and explaining about 87% of the variation in used-car prices, outperforming the alternative SVM model. SVMs do not yield straightforward coefficient interpretations; they learn support vectors and decision functions in a transformed feature space. 
-```{r svm-metrics, message=FALSE, echo=FALSE, warning=FALSE}
-svm_metrics <- readr::read_csv(
-  here("report", "models", "svm", "svm_log_price_metrics.csv"),
-  show_col_types = FALSE
-)
-
-svm_best <- readr::read_lines(here("report", "models", "svm", "svm_best_model.txt"))[1]
-
-svm_metrics_wide <- svm_metrics |>
-  tidyr::pivot_wider(names_from = .metric, values_from = .estimate)
-
-knitr::kable(svm_metrics_wide, digits = 3, caption = "Test metrics for SVM variants (target: log_price)")
-```
-
-
-### 8.3 Interpretation of results
-
-Both models show strong agreement between predicted and true prices, with points clustering closely around the diagonal and the smooth curve largely overlapping the ideal line, indicating good calibration and limited systematic bias. Slight over-prediction is visible for very low-priced cars and mild under-prediction for the most expensive vehicles, a common pattern in pricing problems. The e1071 radial SVM exhibits marginally tighter clustering and smoother alignment with the diagonal, consistent with its lower RMSE and higher R².
-```{r svm-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
-pred_e1071 <- readr::read_delim(
-  here("report", "models", "svm", "svm_log_price_e1071_predictions.csv"),
-  delim = ";",
-  show_col_types = FALSE
-) |>
-  dplyr::mutate(model = "e1071_radial")
-
-pred_kern <- readr::read_delim(
-  here("report", "models", "svm", "svm_log_price_kernlab_predictions.csv"),
-  delim = ";",
-  show_col_types = FALSE
-) |>
-  dplyr::mutate(model = "kernlab_radial")
-
-plot_svm <- function(df, title) {
-  df <- df |>
-    dplyr::mutate(resid = pred_log_price - log_price)
-
-  ggplot2::ggplot(df, ggplot2::aes(x = log_price, y = pred_log_price, color = resid)) +
-    ggplot2::geom_point(alpha = 0.7, size = 1.4) +
-    ggplot2::geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 0.8) +
-    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
-    ggplot2::coord_equal() +
-    ggplot2::scale_color_gradient2(
-      low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
-      midpoint = 0,
-      name = "Residual price (pred - true)\nred = under, grey = near, green = over\n"
-    ) +
-    ggplot2::labs(
-      title = title,
-      x = "True log(price)",
-      y = "Predicted log(price)"
-    ) +
-    ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::theme(
-      legend.position = "none",
-      plot.title.position = "plot",
-      plot.title = ggplot2::element_text(hjust = 0, vjust= -20)
-    )
-}
-
-p1 <- plot_svm(pred_e1071, "e1071 radial SVM:\n predicted vs true")
-p2 <- plot_svm(pred_kern, "kernlab radial SVM:\n predicted vs true")
-
-# Standalone legend using the same residual scale
-legend_plot <- ggplot2::ggplot(
-  data.frame(resid = c(-0.5, 0, 0.5), x = 1, y = 1),
-  ggplot2::aes(x = x, y = y, color = resid)
-) +
-  ggplot2::geom_point(alpha = 0) + # invisible points; legend only
-  ggplot2::scale_color_gradient2(
-    low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
-    midpoint = 0,
-    name = "Residual (pred - true)\nred = under, grey = near, green = over\nDashed line: perfect prediction\nBlack curve: average prediction behaviour"
-  ) +
-  ggplot2::guides(color = ggplot2::guide_colorbar(
-    barheight = unit(60, "pt"),
-    title.theme = ggplot2::element_text(size = 12),
-    label.theme = ggplot2::element_text(size = 11)
-  )) +
-  ggplot2::theme_void() +
-  ggplot2::theme(
-    legend.position = "right"
-  )
-
-patchwork::wrap_plots(
-  p1,
-  p2,
-  legend_plot,
-  ncol = 3,
-  widths = c(1, 1, 0.22)
-)
-```
-
-## 9. Neural network model (regression)
-We fit two neural networks to predict `log_price`: a caret `nnet` with preprocessing/tuning and a manual `neuralnet` with a shallow hidden layer.
-
-### 9.1 Model specification
-- Load the engineered data and keep predictors plus `log_price`.
-- Split 80/20 into train/test (seeded).
-- caret `nnet`: recipe with dummy variables + zero-variance filter + centering/scaling; 3-fold cross validation over a small size/decay grid; `maxit=300`.
-- manual `neuralnet`: one hidden layer (4 units) on scaled/dummified matrix, with optional subsampling for speed.
-- Save models, per-model predictions, and combined metrics to `report/models/nn`.
-
-### 9.2 Cross-validation
-- caret tuning uses 3-fold cross validation on the training split to choose size/decay; the manual `neuralnet` uses fixed architecture (no CV tuning).
-- CV metrics come from training folds; test metrics come from the untouched 20% hold-out.
-- Only one heatmap is shown because only the caret model does a grid search; the manual neuralnet keeps a single, simple layout without tuning.
-
-Best caret grid point: `size = 5`, `decay = 0.001` (CV RMSE ≈ 0.372). The white/black marker on the heatmap highlights this combination.
-
-```{r nn-heatmap-caret, echo=FALSE, out.width="60%"}
-knitr::include_graphics(here("report", "models", "nn", "nn_tuning_heatmap_caret.png"))
-```
-
-### 9.3 RMSE/MAE/R² on test split
-The caret-based neural network performs better than the manually specified variant, achieving a smaller average prediction error (RMSE ≈ 0.37) and explaining about 79% of the variation in used-car prices (R² ≈ 0.79). The manually specified neural network shows weaker predictive performance, with larger errors (RMSE ≈ 0.41) and a lower proportion of explained variance (R² ≈ 0.74). Neural networks do not provide easily interpretable coefficients; instead, they learn complex non-linear relationships between vehicle characteristics and prices through layered transformations.
-```{r nn-metrics, message=FALSE, echo=FALSE}
-nn_metrics <- readr::read_csv(
-  here("report", "models", "nn", "nn_log_price_metrics.csv"),
-  show_col_types = FALSE
-)
-
-nn_best <- readr::read_lines(here("report", "models", "nn", "nn_best_model.txt"))[1]
-
-nn_metrics_wide <- nn_metrics |>
-  tidyr::pivot_wider(names_from = .metric, values_from = .estimate)
-
-knitr::kable(nn_metrics_wide, digits = 3, caption = "Test metrics for NN variants (target: log_price)")
-```
-
-### 9.4 Interpretation of results
-Both neural network models capture the strong relationship between observed and predicted log-transformed prices, indicating that the main structure of the data is well learned. Predictions are generally accurate across the central price range, where most observations lie, with limited overall bias.
-
-The caret-based neural network shows more stable and consistent performance across different price levels. In contrast, the manually specified neural network exhibits greater variability in its predictions, particularly for higher-priced vehicles, where underestimation is more pronounced.
-
-Overall, while both neural networks perform well, the caret implementation delivers more reliable predictions across the full price range and is therefore preferred in this analysis.
-```{r nn-pred-vs-true, fig.width=11, fig.height=5.5, message=FALSE, echo=FALSE}
-pred_caret <- readr::read_delim(
-  here("report", "models", "nn", "nn_log_price_caret_predictions.csv"),
-  delim = ";",
-  show_col_types = FALSE
-) |>
-  dplyr::mutate(model = "caret_nnet")
-
-pred_manual <- readr::read_delim(
-  here("report", "models", "nn", "nn_log_price_neuralnet_predictions.csv"),
-  delim = ";",
-  show_col_types = FALSE
-) |>
-  dplyr::mutate(model = "neuralnet_manual")
-
-plot_nn <- function(df, title) {
-  df <- df |>
-    dplyr::mutate(resid = pred_log_price - log_price)
-
-  ggplot2::ggplot(df, ggplot2::aes(x = log_price, y = pred_log_price, color = resid)) +
-    ggplot2::geom_point(alpha = 0.7, size = 1.4) +
-    ggplot2::geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 0.8) +
-    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
-    ggplot2::coord_equal() +
-    ggplot2::scale_color_gradient2(
-      low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
-      midpoint = 0,
-      name = "Residual (pred - true)\nred = under-prediction, grey = near, green = over-prediction\nDashed line: perfect prediction\nBlack curve: average prediction behaviour"
-    ) +
-    ggplot2::labs(
-      title = title,
-      x = "True log(price)",
-      y = "Predicted log(price)"
-    ) +
-    ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::theme(
-      legend.position = "none",
-      plot.title.position = "plot",
-      plot.title = ggplot2::element_text(hjust = 0, vjust= -20)
-    )
-}
-
-p1 <- plot_nn(pred_caret, "caret nnet: predicted vs true")
-p2 <- plot_nn(pred_manual, "neuralnet manual: predicted vs true")
-
-legend_plot_nn <- ggplot2::ggplot(
-  data.frame(resid = c(-0.5, 0, 0.5), x = 1, y = 1),
-  ggplot2::aes(x = x, y = y, color = resid)
-) +
-  ggplot2::geom_point(alpha = 0) +
-  ggplot2::scale_color_gradient2(
-    low = "#B91C1C", mid = "#CBD5E1", high = "#15803D",
-    midpoint = 0,
-    name = "Residual (pred - true)\nred = under-prediction, grey = near, green = over-prediction\nDashed line: perfect prediction\nBlack curve: average prediction behaviour"
-  ) +
-  ggplot2::guides(color = ggplot2::guide_colorbar(
-    barheight = unit(60, "pt"),
-    title.theme = ggplot2::element_text(size = 12),
-    label.theme = ggplot2::element_text(size = 11)
-  )) +
-  ggplot2::theme_void() +
-  ggplot2::theme(
-    legend.position = "right"
-  )
-
-patchwork::wrap_plots(
-  p1,
-  p2,
-  legend_plot_nn,
-  ncol = 3,
-  widths = c(1, 1, 0.22)
-)
-```

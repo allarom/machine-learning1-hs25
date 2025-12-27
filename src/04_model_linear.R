@@ -35,36 +35,68 @@ model_data <- cars |>
   tidyr::drop_na()
 
 # -------------------------------------------------------------------
-# 3. Fit linear regression on log(price)
+# 3. Train/test split (for comparable RMSE)
+# -------------------------------------------------------------------
+set.seed(123)
+n <- nrow(model_data)
+train_idx <- sample.int(n, size = floor(0.8 * n))
+
+train_data <- model_data[train_idx, ]
+test_data  <- model_data[-train_idx, ]
+
+# -------------------------------------------------------------------
+# 4. Fit linear regression on log(price)
 # -------------------------------------------------------------------
 lm_linear <- stats::lm(
   log_price ~ age + milage_k + accident_bin +
     brand + fuel_type + transmission + ext_col + int_col,
-  data = model_data
+  data = train_data
 )
 
-lm_summary <- summary(lm_linear)
+# Predictions (train/test)
+pred_train <- stats::predict(lm_linear, newdata = train_data)
+pred_test  <- stats::predict(lm_linear, newdata = test_data)
 
-# basic performance metrics
-rmse_log <- sqrt(mean(lm_summary$residuals^2))
-r2_linear <- lm_summary$r.squared
+# RMSE on log scale (comparable to SVM/NN if they also predict log_price)
+rmse_train_log <- sqrt(mean((train_data$log_price - pred_train)^2))
+rmse_test_log  <- sqrt(mean((test_data$log_price  - pred_test)^2))
+
+# R² on train (from model) + R² on test (manual)
+r2_train <- summary(lm_linear)$r.squared
+r2_test  <- 1 - sum((test_data$log_price - pred_test)^2) /
+  sum((test_data$log_price - mean(test_data$log_price))^2)
 
 message("Linear model fitted with ", length(coef(lm_linear)), " coefficients.")
-message("RMSE (log-price scale): ", round(rmse_log, 3))
-message("R² (log-price scale): ", round(r2_linear, 3))
+message("RMSE train (log): ", round(rmse_train_log, 3))
+message("RMSE test  (log): ", round(rmse_test_log, 3))
+message("R² train (log): ", round(r2_train, 3))
+message("R² test  (log): ", round(r2_test, 3))
 
 # -------------------------------------------------------------------
-# 4. Add predictions back to data (useful for plots / diagnostics)
+# 5. Add predictions back to full data (useful for plots / diagnostics)
 # -------------------------------------------------------------------
 model_data <- model_data |>
   dplyr::mutate(
-    pred_log_price    = stats::predict(lm_linear),
-    resid_log_price   = log_price - pred_log_price,
+    split           = ifelse(dplyr::row_number() %in% train_idx, "train", "test"),
+    pred_log_price   = stats::predict(lm_linear, newdata = model_data),
+    resid_log_price  = log_price - pred_log_price,
     pred_price_dollar = exp(pred_log_price)
   )
 
-# keep model and model_data in the environment for the report
+# Metrics table (for report + later final comparison table)
+lm_metrics <- tibble::tibble(
+  model = "Linear regression",
+  target = "log_price",
+  rmse_train = rmse_train_log,
+  rmse_test = rmse_test_log,
+  r2_train = r2_train,
+  r2_test = r2_test
+)
+
+# keep objects in the environment for the report
 assign("lm_linear", lm_linear, envir = .GlobalEnv)
 assign("lm_linear_data", model_data, envir = .GlobalEnv)
-
+assign("lm_metrics", lm_metrics, envir = .GlobalEnv)
+assign("lm_linear_rmse_log", rmse_test_log, envir = .GlobalEnv)
+assign("lm_linear_r2_log", r2_test, envir = .GlobalEnv)
 
