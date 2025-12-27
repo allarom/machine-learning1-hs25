@@ -912,3 +912,72 @@ patchwork::wrap_plots(
   widths = c(1, 1, 0.22)
 )
 ```
+
+
+## 10. Model Comparison – Accident History  
+*(Binomial GLM vs. Binomial GAM)*
+
+Because `accident_bin` is a binary outcome, we compare only models suitable for
+classification: the **binomial GLM (logistic regression)** and the
+**binomial GAM**. Both models were trained on the same feature set and evaluated
+on the same train/test split.
+
+### 10.1 Evaluation metrics
+
+```{r accident-test-compare, message=FALSE, echo=FALSE}
+features_path <- here("data", "processed", "used_cars_features.csv")
+cars <- readr::read_delim(features_path, delim = ";", show_col_types = FALSE)
+
+
+# --- 1. Create train and test set (20% of data) ---
+set.seed(123)  # reproducible
+indices <- sample(seq_len(nrow(cars)), size = 0.2 * nrow(cars)) # 20% of rows for testing
+test_accident <- cars[indices, ]
+train_accident <- cars[-indices, ]
+
+# --- 2. Fit model
+glm.car.cv <- glm(accident_bin ~ brand + age + milage_k + fuel_type + transmission + price_dollar + horsepower + cylinders, 
+                  data = train_accident,
+                  family = binomial)
+
+gam.car.cv <- mgcv::gam(accident_bin ~ brand + fuel_type + transmission + 
+                          cylinders + s(milage_k) + s(price_dollar) + s(horsepower) + s(age), 
+                        data = train_accident,
+                        family = binomial)
+
+# --- 3. Predict accident probabilities ---
+glm_prob <- predict(glm.car.cv, newdata = test_accident, type = "response")
+gam_prob <- predict(gam.car.cv, newdata = test_accident, type = "response")
+
+# --- 4. Class predictions (0.5 threshold) ---
+glm_pred <- ifelse(glm_prob > 0.5, 1, 0)
+gam_pred <- ifelse(gam_prob > 0.5, 1, 0)
+
+# --- 5. Evaluation metrics ---
+# Accuracy
+glm_acc <- mean(glm_pred == test_accident$accident_bin)
+gam_acc <- mean(gam_pred == test_accident$accident_bin)
+
+# AUC
+glm_auc <- auc(test_accident$accident_bin, glm_prob)
+gam_auc <- auc(test_accident$accident_bin, gam_prob)
+
+# --- 6. Combine results into table ---
+accident_comp <- tibble(
+  Model = c("Binomial GLM", "Binomial GAM"),
+  Accuracy = c(glm_acc, gam_acc),
+  AUC = c(as.numeric(glm_auc), as.numeric(gam_auc))
+)
+
+# --- 7. Display table ---
+knitr::kable(accident_comp, digits = 3,
+             caption = "Predictive performance for accident history models (20% random test set)")
+```
+
+### 10.2 Interpretation
+
+The binomial GAM slightly outperforms the GLM (Accuracy 0.728 vs. 0.724; AUC 0.707 vs. 0.704) by capturing nonlinear effects in the data. The GLM provides a simple, interpretable baseline, while the GAM offers a more flexible model that better fits the patterns in accident history.
+
+
+
+
