@@ -29,6 +29,9 @@ packages <- c(
   "rsample",     # Train-test splits
   "yardstick",   # Model evaluation
   
+  # Evaluation
+  "pROC",        # AUC / ROC curves
+  
   # Preprocessing
   "recipes",
   
