@@ -1,1 +1,1 @@
-Best NN model: caret_nnet with RMSE = 0.369 (lower is better)
+Best NN model: caret_nnet with RMSE = 0.3603 (lower is better)

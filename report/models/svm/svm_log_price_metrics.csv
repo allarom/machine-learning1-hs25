@@ -1,7 +1,7 @@
 .metric,.estimator,.estimate,model
-rmse,standard,0.2898077576377921,e1071_radial
-mae,standard,0.20899488661741603,e1071_radial
-rsq,standard,0.867669557817197,e1071_radial
-rmse,standard,0.3543617631693985,kernlab_radial
-mae,standard,0.2514012757821192,kernlab_radial
-rsq,standard,0.8032389855324467,kernlab_radial
+rmse,standard,0.2898077576377917,e1071_radial
+mae,standard,0.20899488661741802,e1071_radial
+rsq,standard,0.8676695578171987,e1071_radial
+rmse,standard,0.35436176316940027,kernlab_radial
+mae,standard,0.25140127578212096,kernlab_radial
+rsq,standard,0.8032389855324439,kernlab_radial
