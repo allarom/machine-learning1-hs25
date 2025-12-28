@@ -2,7 +2,8 @@
 title: "Used Cars – Applied ML Project"
 output:
   html_document:
-    css: "styles.css"
+    css: styles.css
+  pdf_document: default
 ---
 
 <!-- Load libraries -->
@@ -205,19 +206,15 @@ We implement and fit the model by sourcing the script
 # Fit the baseline linear regression model and prepare lm_linear_data
 source(here::here("src", "04_model_linear.R"))
 
+# Show metrics table (RMSE/R² train + test)
+knitr::kable(lm_metrics, digits = 3, caption = "Linear regression metrics (target: log_price)")
+
 # Show a compact summary of the model 
 broom::tidy(lm_linear) |> 
   dplyr::slice(1:10)  # show only first 10 coefficients
 
 ```
 
-```{r linear-metrics, echo=FALSE}
-tibble::tibble(
-  metric = c("RMSE (log-price)", "R squared (log-price)"),
-  value  = c(lm_linear_rmse_log, lm_linear_r2_log)
-) |>
-  knitr::kable(digits = 3)
-```
 
 ### 4.3 Interpretation of selected coefficients
 
@@ -478,28 +475,16 @@ holding other variables fixed.
 
 We fit the Poisson GLM by sourcing `src/06_model_glm_poisson.R`, which:
 1) loads the feature data,  
-2) creates `milage_k_count`,  
-3) fits a Poisson GLM with log link, and  
-4) adds predictions/residuals back to the data.
+2) creates the count-like response `milage_k_count`,  
+3) fits a Poisson GLM with log link,  
+4) evaluates the model using train/test RMSE (on the count scale) and additional diagnostics (AIC, deviance-based pseudo-R², and Pearson dispersion for overdispersion), and  
+5) adds predictions/residuals back to the data.  
 
 ```{r poisson-fit, message=FALSE, warning=FALSE}
 source(here::here("src", "06_model_glm_poisson.R"))
 
-# compact coefficient table incl. significance stars
-poisson_tbl <- broom::tidy(glm_poisson) |>
-  dplyr::mutate(
-    signif = dplyr::case_when(
-      p.value < 0.001 ~ "***",
-      p.value < 0.01  ~ "**",
-      p.value < 0.05  ~ "*",
-      p.value < 0.1   ~ ".",
-      TRUE            ~ ""
-    )
-  )
+knitr::kable(poisson_metrics, digits = 3, caption = "Poisson GLM metrics (target: milage_k_count)")
 
-poisson_tbl |>
-  dplyr::select(term, estimate, std.error, statistic, p.value, signif) |>
-  dplyr::slice(1:12)
 ```
 
 ```{r poisson-metrics, echo=FALSE, message=FALSE, warning=FALSE}
@@ -521,20 +506,17 @@ comparability and interpretation practice.
 
 ### 6.3 Interpretation of selected coefficients
 
-In a Poisson GLM with log link:
-
-- `exp(beta) > 1` → expected count increases  
-- `exp(beta) < 1` → expected count decreases  
-- percent change: `(exp(beta) - 1) * 100`
+In a Poisson GLM with log link, coefficients are interpreted via rate ratios.
+A rate ratio exp(β) > 1 means a higher expected mileage count, exp(β) < 1 means a lower expected mileage count, holding other variables constant.
 
 ```{r poisson-effects, echo=FALSE, message=FALSE, warning=FALSE}
 effects_tbl <- broom::tidy(glm_poisson) |>
   dplyr::mutate(
     rate_ratio = exp(estimate),
-    pct_change = (rate_ratio - 1) * 100
+    pct_change = 100 * (rate_ratio - 1)
   )
 
-selected_terms <- c("age", "accident_bin", "transmissionManual", "fuel_typeElectric")
+selected_terms <- c("age", "accident_bin", "fuel_typeElectric", "transmissionManual")
 
 effects_tbl |>
   dplyr::filter(term %in% selected_terms) |>
@@ -542,8 +524,20 @@ effects_tbl |>
   dplyr::mutate(
     rate_ratio = round(rate_ratio, 3),
     pct_change = round(pct_change, 1)
-  )
+  ) |>
+  knitr::kable(caption = "Poisson GLM: selected effects on expected milage_k_count")
 ```
+
+**Interpretation of selected coefficients (Poisson GLM)**  
+In this Poisson GLM, the response variable is `milage_k_count` (mileage in thousands of miles, rounded to an integer). With a log link, coefficients are interpreted as **multiplicative effects** on the expected mileage count: `exp(β)` is a “rate ratio”. Values above 1 indicate higher expected mileage, values below 1 indicate lower expected mileage, holding all other variables constant.
+
+- **Age (`β ≈ 0.023`, rate ratio ≈ 1.023):** Each additional year of car age is associated with about **+2.3% higher expected mileage (in thousands)**, controlling for the other predictors. This is plausible because older cars have typically been driven longer.  
+- **Accident history (`accident_bin`, `β ≈ 0.113`, rate ratio ≈ 1.119):** Cars with at least one reported accident/damage have about **+11.9% higher expected mileage** than cars without accident history (all else equal). A reasonable explanation is that higher-mileage cars may be more exposed to accident risk and wear.  
+- **Fuel type: Electric (`β ≈ −0.590`, rate ratio ≈ 0.554):** Electric cars show about **−44.6% lower expected mileage** than the reference fuel type in this dataset, holding the other variables fixed. This may reflect differences in typical usage patterns and the model mix in the sample.  
+- **Transmission: Manual (`β ≈ −0.118`, rate ratio ≈ 0.889):** Manual transmission is associated with about **−11.1% lower expected mileage** than the reference transmission type. However, this effect is **not statistically strong at the 5% level** (p ≈ 0.11), so the evidence for a real difference is weaker.
+
+Overall, these results should be interpreted as **associations** within this dataset (not causal effects). Also, because `milage_k_count` is a “count-like proxy” created by rounding mileage-in-thousands, the Poisson model is mainly used here to demonstrate GLM interpretation and diagnostics rather than to claim a perfect data-generating mechanism.
+::contentReference[oaicite:0]{index=0}
 
 ### 6.4 Residual diagnostics
 
@@ -913,116 +907,11 @@ patchwork::wrap_plots(
 )
 ```
 
-## 10. Model comparison: linear regression vs. SVM 
+# Use of Generative AI
+We used generative AI as a support tool for coding and report writing. For coding, it helped us clarify R/statistical concepts (e.g., GLM assumptions, coefficient interpretation with log link, select() vs. transmute()), debug knitting errors, and draft structured template code for model scripts (train/test split, RMSE calculation, storing metrics). For writing, it supported drafting and refining report text (model descriptions, interpretation of results, and metric explanations) to keep a consistent structure across sections.
 
-Both models use the same 80/20 train-test split (stored in `data/processed/train_test_split.rds`). The table below compares the linear regression on `log_price` to the best-performing SVM.
+It was easy to obtain quick explanations and first drafts. It was harder to ensure suggestions matched our exact project setup (correct variable names, shared train/test split, and what was actually implemented). Some things are unreliable without verification, e.g., assuming code will run unchanged or that generic modelling advice applies directly.
 
-### 10.1 Evaluation metrics
-```{r linear-svm-compare, echo=FALSE, message=FALSE}
-lm_metrics <- readr::read_csv(
-  here("report", "models", "linear", "linear_log_price_metrics.csv"),
-  show_col_types = FALSE
-) |>
-  dplyr::transmute(
-    model = "Linear regression",
-    rmse = rmse_test,
-    mae  = mae_test,
-    r2   = r2_test
-  )
-
-svm_metrics <- readr::read_csv(
-  here("report", "models", "svm", "svm_log_price_metrics.csv"),
-  show_col_types = FALSE
-) |>
-  dplyr::filter(.metric %in% c("rmse", "mae", "rsq")) |>
-  dplyr::mutate(stat = dplyr::case_match(.metric, "rmse" ~ "rmse", "mae" ~ "mae", "rsq" ~ "r2")) |>
-  dplyr::select(model, stat, .estimate) |>
-  tidyr::pivot_wider(names_from = stat, values_from = .estimate) |>
-  dplyr::mutate(model = paste("SVM", model)) |>
-  dplyr::slice_min(rmse, n = 1)
-
-compare_tbl <- dplyr::bind_rows(lm_metrics, svm_metrics) |>
-  dplyr::select(model, rmse, mae, r2)
-
-knitr::kable(compare_tbl, digits = 3, caption = "Test metrics on shared split (log_price)")
-```
-### 10.2 Interpretation
-
-On the shared test set, the radial SVM clearly outperforms the linear regression model. It achieves substantially lower prediction errors (RMSE 0.290 vs 0.411, MAE 0.209 vs 0.306) and explains a larger share of the variation in log-prices (R² 0.868 vs 0.733).
-
-While the linear model provides useful interpretability and captures the main price trends, it is limited by its linear structure. The SVM’s ability to model non-linear relationships results in more accurate predictions across the full price range. Overall, this comparison highlights the trade-off between interpretability (linear regression) and predictive accuracy (SVM), with the SVM being the preferred model for prediction.
-
-## 11. Model Comparison – Accident History  
-*(Binomial GLM vs. Binomial GAM)*
-
-Because `accident_bin` is a binary outcome, we compare only models suitable for
-classification: the **binomial GLM (logistic regression)** and the
-**binomial GAM**. Both models were trained on the same feature set and evaluated
-on the same train/test split.
-
-### 11.1 Evaluation metrics
-
-```{r accident-test-compare, message=FALSE, echo=FALSE}
-features_path <- here("data", "processed", "used_cars_features.csv")
-cars <- readr::read_delim(features_path, delim = ";", show_col_types = FALSE)
+Therefore, we critically checked all AI outputs by running the code locally, validating that metrics were computed on the correct split, confirming interpretations with the correct formulas, and removing any text not supported by our results. Generative AI improved productivity, but correctness and final decisions were ensured by the group through testing and review.
 
 
-# --- 1. Create train and test set (20% of data) ---
-set.seed(123)  # reproducible
-indices <- sample(seq_len(nrow(cars)), size = 0.2 * nrow(cars)) # 20% of rows for testing
-test_accident <- cars[indices, ]
-train_accident <- cars[-indices, ]
-
-# --- 2. Fit model
-glm.car.cv <- glm(accident_bin ~ brand + age + milage_k + fuel_type + transmission + price_dollar + horsepower + cylinders, 
-                  data = train_accident,
-                  family = binomial)
-
-gam.car.cv <- mgcv::gam(accident_bin ~ brand + fuel_type + transmission + 
-                          cylinders + s(milage_k) + s(price_dollar) + s(horsepower) + s(age), 
-                        data = train_accident,
-                        family = binomial)
-
-# --- 3. Predict accident probabilities ---
-glm_prob <- predict(glm.car.cv, newdata = test_accident, type = "response")
-gam_prob <- predict(gam.car.cv, newdata = test_accident, type = "response")
-
-# --- 4. Class predictions (0.5 threshold) ---
-glm_pred <- ifelse(glm_prob > 0.5, 1, 0)
-gam_pred <- ifelse(gam_prob > 0.5, 1, 0)
-
-# --- 5. Evaluation metrics ---
-# Accuracy
-glm_acc <- mean(glm_pred == test_accident$accident_bin)
-gam_acc <- mean(gam_pred == test_accident$accident_bin)
-
-# AUC
-glm_auc <- auc(test_accident$accident_bin, glm_prob)
-gam_auc <- auc(test_accident$accident_bin, gam_prob)
-
-# --- 6. Combine results into table ---
-accident_comp <- tibble(
-  Model = c("Binomial GLM", "Binomial GAM"),
-  Accuracy = c(glm_acc, gam_acc),
-  AUC = c(as.numeric(glm_auc), as.numeric(gam_auc))
-)
-
-# --- 7. Display table ---
-knitr::kable(accident_comp, digits = 3,
-             caption = "Predictive performance for accident history models (20% random test set)")
-```
-
-### 11.2 Interpretation
-
-The binomial GAM slightly outperforms the GLM (Accuracy 0.728 vs. 0.724; AUC 0.707 vs. 0.704) by capturing nonlinear effects in the data. The GLM provides a simple, interpretable baseline, while the GAM offers a more flexible model that better fits the patterns in accident history.
-
-## 12. Summary and conclusions
-This project provided hands-on experience with the full applied machine learning workflow, from raw data preparation to model comparison and interpretation. We learned that data cleaning and feature engineering are critical steps that strongly influence model performance, often more than the choice of model itself. In particular, transforming the price variable and carefully handling categorical predictors were essential for obtaining stable and meaningful results.
-
-Through exploratory analysis, we gained insight into the structure of used-car prices and identified clear non-linear relationships with variables such as mileage, age, and brand. These insights helped guide model selection and highlighted the limitations of purely linear approaches for this type of data.
-
-By fitting and comparing multiple models on a shared data split, we learned the importance of fair and consistent evaluation. Using identical predictors, response variables, and train–test splits ensured that performance differences reflected genuine modelling capabilities rather than artefacts of the evaluation setup.
-
-The comparison of linear regression, neural networks, and support vector machines illustrated the trade-off between interpretability and predictive accuracy. Linear models are valuable for understanding price drivers, while more flexible machine learning models—especially the radial Support Vector Machine—deliver superior predictive performance by capturing complex, non-linear patterns.
-
-Overall, this project reinforced that effective applied machine learning requires not only technical modelling skills, but also thoughtful data preparation, careful evaluation design, and clear communication of results aligned with the analysis objective.
