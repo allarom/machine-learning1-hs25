@@ -172,6 +172,8 @@ linear regression model on the log-price:
 
 `log_price ~ age + milage_k + accident_bin + brand + fuel_type + transmission + ext_col + int_col`
 
+We intentionally fit an additive baseline linear model without interaction terms. From the current EDA we mainly observe strong main effects (age, mileage, accident history, brand), but no clear and stable “it depends on” patterns (i.e., slope differences across groups) that would justify adding interactions. Including interactions with many categorical predictors would also greatly increase model complexity and reduce interpretability.
+
 Here
 
 - `log_price` is the natural logarithm of the car price in dollars
