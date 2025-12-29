@@ -909,7 +909,121 @@ patchwork::wrap_plots(
 )
 ```
 
-# Use of Generative AI
+## 10. Model comparison: linear regression vs. SVM 
+
+Both models use the same 80/20 train-test split (stored in `data/processed/train_test_split.rds`). The table below compares the linear regression on `log_price` to the best-performing SVM.
+
+### 10.1 Evaluation metrics
+```{r linear-svm-compare, echo=FALSE, message=FALSE}
+lm_metrics <- readr::read_csv(
+  here("report", "models", "linear", "linear_log_price_metrics.csv"),
+  show_col_types = FALSE
+) |>
+  dplyr::transmute(
+    model = "Linear regression",
+    rmse = rmse_test,
+    mae  = mae_test,
+    r2   = r2_test
+  )
+
+svm_metrics <- readr::read_csv(
+  here("report", "models", "svm", "svm_log_price_metrics.csv"),
+  show_col_types = FALSE
+) |>
+  dplyr::filter(.metric %in% c("rmse", "mae", "rsq")) |>
+  dplyr::mutate(stat = dplyr::case_match(.metric, "rmse" ~ "rmse", "mae" ~ "mae", "rsq" ~ "r2")) |>
+  dplyr::select(model, stat, .estimate) |>
+  tidyr::pivot_wider(names_from = stat, values_from = .estimate) |>
+  dplyr::mutate(model = paste("SVM", model)) |>
+  dplyr::slice_min(rmse, n = 1)
+
+compare_tbl <- dplyr::bind_rows(lm_metrics, svm_metrics) |>
+  dplyr::select(model, rmse, mae, r2)
+
+knitr::kable(compare_tbl, digits = 3, caption = "Test metrics on shared split (log_price)")
+```
+### 10.2 Interpretation
+
+On the shared test set, the radial SVM clearly outperforms the linear regression model. It achieves substantially lower prediction errors (RMSE 0.290 vs 0.411, MAE 0.209 vs 0.306) and explains a larger share of the variation in log-prices (R² 0.868 vs 0.733).
+
+While the linear model provides useful interpretability and captures the main price trends, it is limited by its linear structure. The SVM’s ability to model non-linear relationships results in more accurate predictions across the full price range. Overall, this comparison highlights the trade-off between interpretability (linear regression) and predictive accuracy (SVM), with the SVM being the preferred model for prediction.
+
+## 11. Model Comparison – Accident History  
+*(Binomial GLM vs. Binomial GAM)*
+
+Because `accident_bin` is a binary outcome, we compare only models suitable for
+classification: the **binomial GLM (logistic regression)** and the
+**binomial GAM**. Both models were trained on the same feature set and evaluated
+on the same train/test split.
+
+### 11.1 Evaluation metrics
+
+```{r accident-test-compare, message=FALSE, echo=FALSE}
+features_path <- here("data", "processed", "used_cars_features.csv")
+cars <- readr::read_delim(features_path, delim = ";", show_col_types = FALSE)
+
+
+# --- 1. Create train and test set (20% of data) ---
+set.seed(123)  # reproducible
+indices <- sample(seq_len(nrow(cars)), size = 0.2 * nrow(cars)) # 20% of rows for testing
+test_accident <- cars[indices, ]
+train_accident <- cars[-indices, ]
+
+# --- 2. Fit model
+glm.car.cv <- glm(accident_bin ~ brand + age + milage_k + fuel_type + transmission + price_dollar + horsepower + cylinders, 
+                  data = train_accident,
+                  family = binomial)
+
+gam.car.cv <- mgcv::gam(accident_bin ~ brand + fuel_type + transmission + 
+                          cylinders + s(milage_k) + s(price_dollar) + s(horsepower) + s(age), 
+                        data = train_accident,
+                        family = binomial)
+
+# --- 3. Predict accident probabilities ---
+glm_prob <- predict(glm.car.cv, newdata = test_accident, type = "response")
+gam_prob <- predict(gam.car.cv, newdata = test_accident, type = "response")
+
+# --- 4. Class predictions (0.5 threshold) ---
+glm_pred <- ifelse(glm_prob > 0.5, 1, 0)
+gam_pred <- ifelse(gam_prob > 0.5, 1, 0)
+
+# --- 5. Evaluation metrics ---
+# Accuracy
+glm_acc <- mean(glm_pred == test_accident$accident_bin)
+gam_acc <- mean(gam_pred == test_accident$accident_bin)
+
+# AUC
+glm_auc <- auc(test_accident$accident_bin, glm_prob)
+gam_auc <- auc(test_accident$accident_bin, gam_prob)
+
+# --- 6. Combine results into table ---
+accident_comp <- tibble(
+  Model = c("Binomial GLM", "Binomial GAM"),
+  Accuracy = c(glm_acc, gam_acc),
+  AUC = c(as.numeric(glm_auc), as.numeric(gam_auc))
+)
+
+# --- 7. Display table ---
+knitr::kable(accident_comp, digits = 3,
+             caption = "Predictive performance for accident history models (20% random test set)")
+```
+
+### 11.2 Interpretation
+
+The binomial GAM slightly outperforms the GLM (Accuracy 0.728 vs. 0.724; AUC 0.707 vs. 0.704) by capturing nonlinear effects in the data. The GLM provides a simple, interpretable baseline, while the GAM offers a more flexible model that better fits the patterns in accident history.
+
+## 12. Summary and conclusions
+This project provided hands-on experience with the full applied machine learning workflow, from raw data preparation to model comparison and interpretation. We learned that data cleaning and feature engineering are critical steps that strongly influence model performance, often more than the choice of model itself. In particular, transforming the price variable and carefully handling categorical predictors were essential for obtaining stable and meaningful results.
+
+Through exploratory analysis, we gained insight into the structure of used-car prices and identified clear non-linear relationships with variables such as mileage, age, and brand. These insights helped guide model selection and highlighted the limitations of purely linear approaches for this type of data.
+
+By fitting and comparing multiple models on a shared data split, we learned the importance of fair and consistent evaluation. Using identical predictors, response variables, and train–test splits ensured that performance differences reflected genuine modelling capabilities rather than artefacts of the evaluation setup.
+
+The comparison of linear regression, neural networks, and support vector machines illustrated the trade-off between interpretability and predictive accuracy. Linear models are valuable for understanding price drivers, while more flexible machine learning models—especially the radial Support Vector Machine—deliver superior predictive performance by capturing complex, non-linear patterns.
+
+Overall, this project reinforced that effective applied machine learning requires not only technical modelling skills, but also thoughtful data preparation, careful evaluation design, and clear communication of results aligned with the analysis objective.
+
+## 13. Use of Generative AI
 We used generative AI as a support tool for coding and report writing. For coding, it helped us clarify R/statistical concepts (e.g., GLM assumptions, coefficient interpretation with log link, select() vs. transmute()), debug knitting errors, and draft structured template code for model scripts (train/test split, RMSE calculation, storing metrics). For writing, it supported drafting and refining report text (model descriptions, interpretation of results, and metric explanations) to keep a consistent structure across sections.
 
 It was easy to obtain quick explanations and first drafts. It was harder to ensure suggestions matched our exact project setup (correct variable names, shared train/test split, and what was actually implemented). Some things are unreliable without verification, e.g., assuming code will run unchanged or that generic modelling advice applies directly.
