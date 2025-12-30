@@ -1,20 +1,123 @@
-table {
-  margin-bottom: 2rem;
-}
-thead {
-  border-bottom: 1px solid black;
+/* Base layout */
+body {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  color: #111827;
+  background: #f8fafc;
 }
 
-td:not(:first-child), th:not(:first-child) {
-  padding-left: 1rem;
-  padding-right: 1rem;
+h1, h2, h3, h4 {
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 4.5rem;
+  margin-bottom: 2.2rem;
+}
+
+p, li {
+  font-size: 1.5rem;
+  color: #1f2937;
+}
+
+ul {
+  padding-inline-start: 13px;;
+}
+
+a {
+  color: #2563eb;
+}
+
+code {
+  background: #e5e7eb;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+pre {
+  background: #f3f4f6;
+  color: #0f172a;
+  padding: 1rem;
+  margin-bottom: 4rem;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.hljs,
+pre code {
+  background: #f3f4f6 !important;
+  color: #0f172a !important;
+  font-family: "Roboto Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  font-size: 1.5rem;
+}
+
+/* Tables */
+table {
+  margin-bottom: 4rem;
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+}
+
+thead {
+  border-bottom: 2px solid #e5e7eb;
+  background: #f1f5f9;
+}
+
+td, th {
+  padding: 0.85rem 1rem;
+  font-size: 1.5rem;
+  text-align: left;
+}
+
+tbody tr:nth-child(odd) {
+  background: #f8fafc;
 }
 
 caption {
-  font-weight: bold;
-  font-size: 1.6rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 0.6rem 0;
+  color: #0f172a;
 }
 
-td, th, li, p {
-  font-size: 1.6rem;
+/* Figures */
+img {
+  max-width: 560px !important;
+  height: auto;
+  display: block;
+  margin-left: 0;
+  margin-bottom: 4rem;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+figure {
+  margin: 1.5rem 0;
+}
+
+/* Back to top button */
+.back-to-top {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #0f172a;
+  color: #f9fafb;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 600;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  z-index: 1000;
+}
+
+.back-to-top:hover {
+  background: #e5e7eb;
+  color: #0f172a;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15);
 }
