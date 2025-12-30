@@ -1,18 +1,27 @@
 ---
 title: "Used Cars – Applied ML Project"
+subtitle: "Siles Lévano Julio César, Niederer Tashi, Roman Alla"
+date: "01.01.2026"
 output:
   html_document:
     css: styles.css
-  pdf_document: default
+    toc: true
+    toc_depth: 3
 ---
 
 <!-- Load libraries -->
 ```{r setup, message=FALSE, warning=FALSE, include=FALSE}
 library(tidyverse)
 library(here)
+dir.create("analysis_files/figure-html", recursive = TRUE, showWarnings = FALSE)
+knitr::opts_chunk$set(fig.path = "analysis_files/figure-html/")
 ```
 
-# About the Dataset (Summary)
+<!-- Anchor for back-to-top -->
+<div id="top"></div>
+
+## 1. About the Dataset (Summary)
+
 
 The Used Car Price Prediction dataset contains 4,009 vehicle listings collected from the automotive marketplace cars.com.
 Each row represents a unique car and includes nine key attributes relevant to pricing and vehicle characteristics.
@@ -41,7 +50,6 @@ The dataset provides information on:
 **Price** – listed price of the vehicle
 
 Overall, the dataset offers a structured overview of key features that influence used car valuation. It is well-suited for analytical tasks such as understanding pricing drivers, exploring consumer preferences, and building predictive models for vehicle prices.
-# Raw data
 
 We load the original CSV directly from the project data folder using `here()` so paths work regardless of the working directory.
 
@@ -56,7 +64,7 @@ Basic structure and summary statistics of the raw dataset:
 glimpse(cars_raw)
 ```
 
-# Exploratory Data Analysis
+## 2. Exploratory Data Analysis
 
 We base the EDA on the engineered dataset (`data/processed/used_cars_features.csv`) that keeps cleaned numeric fields and derived features like age, mileage in thousands, and accident flags.
 
@@ -65,7 +73,7 @@ features_path <- here("data", "processed", "used_cars_features.csv")
 cars <- readr::read_delim(features_path, delim = ";", show_col_types = FALSE)
 ```
 
-## Key descriptive values
+### 2.1 Key descriptive values
 
 ```{r descriptive-table, message=FALSE, echo=FALSE}
 num_summary <- tibble::tibble(
@@ -92,7 +100,7 @@ knitr::kable(accident_tbl, digits = 2, caption = "Accident history distribution"
 
 Median listing sits around \$28k, with the middle 50% between roughly \$15.5k and \$47k, while the maximum reaches \$650k—explaining the heavy right tail. Median age is 9 years (IQR: 6–14), typical mileage is about 63k miles (IQR: 30k–103k), and horsepower clusters around 310 HP (IQR: 248–400). About 28% of cars report an accident or damage, a meaningful factor for pricing.
 
-## Price distribution (raw and log)
+### 2.2 Price distribution (raw and log)
 
 ```{r price-raw, echo=FALSE, out.width="85%"}
 knitr::include_graphics(here("report", "plots", "price_distribution_raw.png"))
@@ -106,7 +114,7 @@ knitr::include_graphics(here("report", "plots", "price_distribution.png"))
 
 Log transformation produces a more bell-shaped distribution and stabilizes variance, making linear-style models and visual comparisons more reliable.
 
-## Depreciation by age and fuel type
+### 2.3 Depreciation by age and fuel type
 
 ```{r age-price, echo=FALSE, out.width="85%"}
 knitr::include_graphics(here("report", "plots", "age_vs_price.png"))
@@ -114,7 +122,7 @@ knitr::include_graphics(here("report", "plots", "age_vs_price.png"))
 
 Prices decline with age across fuels. Electric listings start high but show the sharpest early drop; diesel holds comparatively high prices across ages (though the diesel sample is small), and gasoline sits lower overall.
 
-## Price spread across top brands
+### 2.4 Price spread across top brands
 
 ```{r brand-price, echo=FALSE, out.width="85%"}
 knitr::include_graphics(here("report", "plots", "brand_price_boxplots.png"))
@@ -122,7 +130,7 @@ knitr::include_graphics(here("report", "plots", "brand_price_boxplots.png"))
 
 Among the 12 most common brands, Porsche leads on median price, followed by Land Rover and Mercedes-Benz; Volume brands (Toyota, Nissan, Jeep) cluster lower with tighter spreads, while some (Chevrolet, Ford) span broader lineups.
 
-## Mileage impact by transmission
+### 2.5 Mileage impact by transmission
 
 ```{r milage-price, echo=FALSE, out.width="85%"}
 knitr::include_graphics(here("report", "plots", "milage_vs_price.png"))
@@ -130,7 +138,7 @@ knitr::include_graphics(here("report", "plots", "milage_vs_price.png"))
 
 Higher mileage correlates with lower prices. We use a loess smoother (not a straight trendline) and cap the x-axis at 250k miles to reduce the influence of extreme outliers; automatics show a steady decline, and the smaller manual subset is noisier but similar in direction.
 
-## Horsepower premium
+### 2.6 Horsepower premium
 
 ```{r hp-price, echo=FALSE, out.width="85%"}
 knitr::include_graphics(here("report", "plots", "horsepower_vs_price.png"))
@@ -138,7 +146,7 @@ knitr::include_graphics(here("report", "plots", "horsepower_vs_price.png"))
 
 Price rises with horsepower, especially from ~250 HP upward; we cap horsepower at 700 to avoid a handful of ultra-high-HP outliers from distorting the loess smoother, so the trend reflects the bulk of the market rather than extreme sports models.
 
-## Accident history effect
+### 2.7 Accident history effect
 
 ```{r accident-price, echo=FALSE, out.width="70%"}
 knitr::include_graphics(here("report", "plots", "accident_vs_price.png"))
@@ -146,7 +154,7 @@ knitr::include_graphics(here("report", "plots", "accident_vs_price.png"))
 
 Cars with reported accidents trade at a clear discount relative to clean histories, even after log-scaling prices, confirming accident history as an important predictor.
 
-## 4. Linear regression model
+## 3. Linear regression model
 
 
 In Section 3 we saw that price is strongly right-skewed and that log(price) has an approximately 
@@ -341,7 +349,7 @@ interactions or nonlinear effects) might capture the remaining structure
 in the data even better.
 
 
-## 5. Generalized Linear Model — Binomial (Logistic Regression)
+## 4. Generalized Linear Model — Binomial (Logistic Regression)
 
 A binomial Generalized Linear Model (GLM) is appropriate when the **response
 variable is binary**.  
@@ -449,7 +457,7 @@ These odds ratios allow for an intuitive interpretation of how each variable aff
 The binomial GLM indicates that accident probability is primarily driven by vehicle usage and value. Higher mileage and higher horsepower are associated with increased accident odds, while higher-priced cars are less likely to have a reported accident history. This is consistent with the intuition that cheaper cars tend to be older, more heavily used, and exposed to greater wear and risk. Electric vehicles exhibit substantially lower accident odds in the model. However, this result is likely influenced by sample composition: electric cars in the dataset are generally newer and therefore have had less exposure time to accidents. The observed fuel-type effect may therefore partially reflect vehicle age rather than an intrinsic safety advantage. Overall, the GLM provides a transparent and interpretable baseline model for accident risk. Its linear structure, however, limits its ability to capture nonlinear exposure effects, motivating the use of a Generalised Additive Model in the next section.
 
 
-## 6. Generalized Linear Model — Poisson
+## 5. Generalized Linear Model — Poisson
 
 A Poisson GLM is typically used when the **response variable is a count**
 (non-negative integers). Because this dataset does not contain a natural event
@@ -564,7 +572,7 @@ with genuine count outcomes, overdispersion should be checked carefully and a
 quasi-Poisson or negative binomial model may be more appropriate.
 
 
-## 7. Generalised Additive Model (GAM)
+## 6. Generalised Additive Model (GAM)
 
 To relax the linearity assumption of the binomial GLM, we fit a **Generalised Additive Model (GAM)** to predict whether a car has had at least one reported accident (accident_bin). The GAM allows for **non-linear relationships** between key continuous predictors and accident probability, while retaining interpretable parametric effects for categorical variables. 
 
@@ -665,7 +673,7 @@ The Generalised Additive Model identifies mileage as the dominant predictor of a
 
 
 
-## 8. SVM model (regression)
+## 7. SVM model (regression)
 We fit Support Vector Machine (SVM) regression models to predict `log_price`. We used two libraries: `e1071` and `kernlab` (via `caret::train`). 
 Both models employ a radial kernel to capture non-linear relationships in the data.
 
@@ -792,7 +800,7 @@ patchwork::wrap_plots(
 )
 ```
 
-## 9. Neural network model (regression)
+## 8. Neural network model (regression)
 We fit two neural networks to predict `log_price`: a caret `nnet` with preprocessing/tuning and a manual `neuralnet` with a shallow hidden layer.
 
 ### 9.1 Model specification
@@ -909,7 +917,7 @@ patchwork::wrap_plots(
 )
 ```
 
-## 10. Model comparison: linear regression vs. SVM 
+## 9. Model comparison: linear regression vs. SVM 
 
 Both models use the same 80/20 train-test split (stored in `data/processed/train_test_split.rds`). The table below compares the linear regression on `log_price` to the best-performing SVM.
 
@@ -944,11 +952,9 @@ knitr::kable(compare_tbl, digits = 3, caption = "Test metrics on shared split (l
 ```
 ### 10.2 Interpretation
 
-On the shared test set, the radial SVM clearly outperforms the linear regression model. It achieves substantially lower prediction errors (RMSE 0.290 vs 0.411, MAE 0.209 vs 0.306) and explains a larger share of the variation in log-prices (R² 0.868 vs 0.733).
+On the shared test set, the radial SVM clearly outperforms the linear regression model, achieving substantially lower prediction errors (RMSE 0.290 vs 0.411, MAE 0.209 vs 0.306) and explaining a larger share of the variation in log-prices (R² 0.868 vs 0.733). While a fair comparison could in principle involve extending the linear regression with interaction terms or non-linear effects, we intentionally retain a simple additive baseline specification. The exploratory analysis reveals strong main effects but no clear or stable interaction patterns, and adding such complexity - particularly with multiple categorical predictors - would substantially reduce interpretability. Although the linear model captures the main price trends and remains valuable for explanation, its linear structure limits predictive accuracy. In contrast, the SVM’s ability to model non-linear relationships leads to more accurate predictions across the full price range. Overall, this comparison highlights the trade-off between interpretability and predictive performance, with the SVM being the preferred model when prediction accuracy is the primary objective.
 
-While the linear model provides useful interpretability and captures the main price trends, it is limited by its linear structure. The SVM’s ability to model non-linear relationships results in more accurate predictions across the full price range. Overall, this comparison highlights the trade-off between interpretability (linear regression) and predictive accuracy (SVM), with the SVM being the preferred model for prediction.
-
-## 11. Model Comparison – Accident History  
+## 10. Model Comparison – Accident History  
 *(Binomial GLM vs. Binomial GAM)*
 
 Because `accident_bin` is a binary outcome, we compare only models suitable for
@@ -1012,7 +1018,7 @@ knitr::kable(accident_comp, digits = 3,
 
 The binomial GAM slightly outperforms the GLM (Accuracy 0.728 vs. 0.724; AUC 0.707 vs. 0.704) by capturing nonlinear effects in the data. The GLM provides a simple, interpretable baseline, while the GAM offers a more flexible model that better fits the patterns in accident history.
 
-## 12. Summary and conclusions
+## 11. Summary and conclusions
 This project provided hands-on experience with the full applied machine learning workflow, from raw data preparation to model comparison and interpretation. We learned that data cleaning and feature engineering are critical steps that strongly influence model performance, often more than the choice of model itself. In particular, transforming the price variable and carefully handling categorical predictors were essential for obtaining stable and meaningful results.
 
 Through exploratory analysis, we gained insight into the structure of used-car prices and identified clear non-linear relationships with variables such as mileage, age, and brand. These insights helped guide model selection and highlighted the limitations of purely linear approaches for this type of data.
@@ -1023,11 +1029,13 @@ The comparison of linear regression, neural networks, and support vector machine
 
 Overall, this project reinforced that effective applied machine learning requires not only technical modelling skills, but also thoughtful data preparation, careful evaluation design, and clear communication of results aligned with the analysis objective.
 
-## 13. Use of Generative AI
+## 12. Use of Generative AI
+
+```{=html}
+<a href="#top" class="back-to-top">Back to top</a>
+```
 We used generative AI as a support tool for coding and report writing. For coding, it helped us clarify R/statistical concepts (e.g., GLM assumptions, coefficient interpretation with log link, select() vs. transmute()), debug knitting errors, and draft structured template code for model scripts (train/test split, RMSE calculation, storing metrics). For writing, it supported drafting and refining report text (model descriptions, interpretation of results, and metric explanations) to keep a consistent structure across sections.
 
 It was easy to obtain quick explanations and first drafts. It was harder to ensure suggestions matched our exact project setup (correct variable names, shared train/test split, and what was actually implemented). Some things are unreliable without verification, e.g., assuming code will run unchanged or that generic modelling advice applies directly.
 
 Therefore, we critically checked all AI outputs by running the code locally, validating that metrics were computed on the correct split, confirming interpretations with the correct formulas, and removing any text not supported by our results. Generative AI improved productivity, but correctness and final decisions were ensured by the group through testing and review.
-
-
