@@ -427,9 +427,9 @@ pct_change = ifelse(odds_ratio > 1,
 (odds_ratio - 1) * 100, # percent increase
 (1 - odds_ratio) * -100), # percent decrease
 signif = case_when(
-p.value < 0.001 ~ "",
-p.value < 0.01 ~ "",
-p.value < 0.05 ~ "",
+p.value < 0.001 ~ "***",
+p.value < 0.01 ~ "**",
+p.value < 0.05 ~ "*",
 p.value < 0.1 ~ ".",
 TRUE ~ ""
 )
@@ -523,7 +523,8 @@ A rate ratio exp(β) > 1 means a higher expected mileage count, exp(β) < 1 mean
 effects_tbl <- broom::tidy(glm_poisson) |>
   dplyr::mutate(
     rate_ratio = exp(estimate),
-    pct_change = 100 * (rate_ratio - 1)
+    pct_change = 100 * (rate_ratio - 1),
+    p.value = formatC(p.value, format = "e", digits = 2)
   )
 
 selected_terms <- c("age", "accident_bin", "fuel_typeElectric", "transmissionManual")
@@ -1019,15 +1020,15 @@ knitr::kable(accident_comp, digits = 3,
 The binomial GAM slightly outperforms the GLM (Accuracy 0.728 vs. 0.724; AUC 0.707 vs. 0.704) by capturing nonlinear effects in the data. The GLM provides a simple, interpretable baseline, while the GAM offers a more flexible model that better fits the patterns in accident history.
 
 ## 11. Summary and conclusions
-This project provided hands-on experience with the full applied machine learning workflow, from raw data preparation to model comparison and interpretation. We learned that data cleaning and feature engineering are critical steps that strongly influence model performance, often more than the choice of model itself. In particular, transforming the price variable and carefully handling categorical predictors were essential for obtaining stable and meaningful results.
+This project applies the full machine learning workflow from data preparation and exploratory analysis to model estimation, evaluation, and interpretation. The results demonstrate that data cleaning and feature engineering are central to model performance and often more influential than the choice of algorithm. In particular, transforming the price variable and carefully processing categorical predictors were essential for stable estimation.
 
-Through exploratory analysis, we gained insight into the structure of used-car prices and identified clear non-linear relationships with variables such as mileage, age, and brand. These insights helped guide model selection and highlighted the limitations of purely linear approaches for this type of data.
+Exploratory analysis revealed strong skewness in used car prices and pronounced nonlinear relationships, especially for mileage and price. These findings motivated the use of flexible modelling approaches beyond simple linear specifications.
 
-By fitting and comparing multiple models on a shared data split, we learned the importance of fair and consistent evaluation. Using identical predictors, response variables, and train–test splits ensured that performance differences reflected genuine modelling capabilities rather than artefacts of the evaluation setup.
+All models were trained on the same data and compared using a common held out test split, ensuring a fair evaluation. Linear regression provided transparent insight into the main pricing drivers, whereas more flexible methods, most notably the radial Support Vector Machine, achieved substantially higher predictive accuracy by capturing complex nonlinear patterns.
 
-The comparison of linear regression, neural networks, and support vector machines illustrated the trade-off between interpretability and predictive accuracy. Linear models are valuable for understanding price drivers, while more flexible machine learning models—especially the radial Support Vector Machine—deliver superior predictive performance by capturing complex, non-linear patterns.
+For accident history modelling, the Generalised Additive Model outperformed the binomial Generalised Linear Model, indicating that nonlinear exposure effects are essential for explaining accident risk. Mileage was identified as the dominant nonlinear determinant, with vehicle price also playing a significant role. After controlling for these effects, most categorical vehicle characteristics exhibited little independent influence.
 
-Overall, this project reinforced that effective applied machine learning requires not only technical modelling skills, but also thoughtful data preparation, careful evaluation design, and clear communication of results aligned with the analysis objective.
+Overall, the analysis shows that effective applied machine learning relies not only on sophisticated algorithms but fundamentally on high quality data preparation, rigorous evaluation design, and clear communication aligned with the analytical objective.
 
 ## 12. Use of Generative AI
 
