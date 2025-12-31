@@ -1172,28 +1172,28 @@ significance or model fit, only the unit of interpretation.</p>
 <td align="right">1.072</td>
 <td align="right">7.245</td>
 <td align="right">0.000</td>
-<td align="left"></td>
+<td align="left">***</td>
 </tr>
 <tr>
 <td align="left">fuel_typeElectric</td>
 <td align="right">0.276</td>
 <td align="right">-72.374</td>
 <td align="right">0.049</td>
-<td align="left"></td>
+<td align="left">*</td>
 </tr>
 <tr>
 <td align="left">price_dollar</td>
 <td align="right">0.979</td>
 <td align="right">-2.146</td>
 <td align="right">0.000</td>
-<td align="left"></td>
+<td align="left">***</td>
 </tr>
 <tr>
 <td align="left">horsepower</td>
 <td align="right">1.096</td>
 <td align="right">9.575</td>
 <td align="right">0.038</td>
-<td align="left"></td>
+<td align="left">*</td>
 </tr>
 </tbody>
 </table>
@@ -1341,7 +1341,7 @@ milage_k_count</caption>
 <th align="right">estimate</th>
 <th align="right">rate_ratio</th>
 <th align="right">pct_change</th>
-<th align="right">p.value</th>
+<th align="left">p.value</th>
 </tr>
 </thead>
 <tbody>
@@ -1350,28 +1350,28 @@ milage_k_count</caption>
 <td align="right">0.0684505</td>
 <td align="right">1.071</td>
 <td align="right">7.1</td>
-<td align="right">0</td>
+<td align="left">0.00e+00</td>
 </tr>
 <tr>
 <td align="left">accident_bin</td>
 <td align="right">0.2065339</td>
 <td align="right">1.229</td>
 <td align="right">22.9</td>
-<td align="right">0</td>
+<td align="left">0.00e+00</td>
 </tr>
 <tr>
 <td align="left">fuel_typeElectric</td>
 <td align="right">-1.0093889</td>
 <td align="right">0.364</td>
 <td align="right">-63.6</td>
-<td align="right">0</td>
+<td align="left">2.88e-156</td>
 </tr>
 <tr>
 <td align="left">transmissionManual</td>
 <td align="right">-0.3109655</td>
 <td align="right">0.733</td>
 <td align="right">-26.7</td>
-<td align="right">0</td>
+<td align="left">1.23e-272</td>
 </tr>
 </tbody>
 </table>
@@ -1905,34 +1905,34 @@ history.</p>
 </div>
 <div id="summary-and-conclusions" class="section level2">
 <h2>11. Summary and conclusions</h2>
-<p>This project provided hands-on experience with the full applied
-machine learning workflow, from raw data preparation to model comparison
-and interpretation. We learned that data cleaning and feature
-engineering are critical steps that strongly influence model
-performance, often more than the choice of model itself. In particular,
-transforming the price variable and carefully handling categorical
-predictors were essential for obtaining stable and meaningful
-results.</p>
-<p>Through exploratory analysis, we gained insight into the structure of
-used-car prices and identified clear non-linear relationships with
-variables such as mileage, age, and brand. These insights helped guide
-model selection and highlighted the limitations of purely linear
-approaches for this type of data.</p>
-<p>By fitting and comparing multiple models on a shared data split, we
-learned the importance of fair and consistent evaluation. Using
-identical predictors, response variables, and train–test splits ensured
-that performance differences reflected genuine modelling capabilities
-rather than artefacts of the evaluation setup.</p>
-<p>The comparison of linear regression, neural networks, and support
-vector machines illustrated the trade-off between interpretability and
-predictive accuracy. Linear models are valuable for understanding price
-drivers, while more flexible machine learning models—especially the
-radial Support Vector Machine—deliver superior predictive performance by
-capturing complex, non-linear patterns.</p>
-<p>Overall, this project reinforced that effective applied machine
-learning requires not only technical modelling skills, but also
-thoughtful data preparation, careful evaluation design, and clear
-communication of results aligned with the analysis objective.</p>
+<p>This project applies the full machine learning workflow from data
+preparation and exploratory analysis to model estimation, evaluation,
+and interpretation. The results demonstrate that data cleaning and
+feature engineering are central to model performance and often more
+influential than the choice of algorithm. In particular, transforming
+the price variable and carefully processing categorical predictors were
+essential for stable estimation.</p>
+<p>Exploratory analysis revealed strong skewness in used car prices and
+pronounced nonlinear relationships, especially for mileage and price.
+These findings motivated the use of flexible modelling approaches beyond
+simple linear specifications.</p>
+<p>All models were trained on the same data and compared using a common
+held out test split, ensuring a fair evaluation. Linear regression
+provided transparent insight into the main pricing drivers, whereas more
+flexible methods, most notably the radial Support Vector Machine,
+achieved substantially higher predictive accuracy by capturing complex
+nonlinear patterns.</p>
+<p>For accident history modelling, the Generalised Additive Model
+outperformed the binomial Generalised Linear Model, indicating that
+nonlinear exposure effects are essential for explaining accident risk.
+Mileage was identified as the dominant nonlinear determinant, with
+vehicle price also playing a significant role. After controlling for
+these effects, most categorical vehicle characteristics exhibited little
+independent influence.</p>
+<p>Overall, the analysis shows that effective applied machine learning
+relies not only on sophisticated algorithms but fundamentally on high
+quality data preparation, rigorous evaluation design, and clear
+communication aligned with the analytical objective.</p>
 </div>
 <div id="use-of-generative-ai" class="section level2">
 <h2>12. Use of Generative AI</h2>
